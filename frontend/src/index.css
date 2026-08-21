@@ -58,7 +58,7 @@ body {
 .erp-sidebar {
   width: 64px;
   min-width: 64px;
-  border: 1px solid #B87B7A;
+  border: 1px solid #856564;
   border-radius: 14px;
   background: #5C3A35;
   display: flex;
@@ -384,7 +384,7 @@ body {
   background: transparent;
   border: none;
   outline: none;
-  color: #374151;
+  color: #3B2A21;
   font-family: inherit;
   font-size: 13px;
 }
@@ -506,14 +506,14 @@ body {
      puede dejar contenido (p. ej. el botón Guardar del formulario) fuera de
      vista sin ninguna pista de que hay más para abajo. */
   scrollbar-width: thin;
-  scrollbar-color: #CC9B9A transparent;
+  scrollbar-color: #B9A08F transparent;
 }
 .erp-content::-webkit-scrollbar { width: 10px; }
-.erp-content::-webkit-scrollbar-track { background: #F3E7E3; }
+.erp-content::-webkit-scrollbar-track { background: #F1E5DE; }
 .erp-content::-webkit-scrollbar-thumb {
-  background: #CC9B9A;
+  background: #B9A08F;
   border-radius: 999px;
-  border: 2px solid #F3E7E3;
+  border: 2px solid #F1E5DE;
 }
 .erp-content::-webkit-scrollbar-thumb:hover { background: #856564; }
 
@@ -694,14 +694,14 @@ body {
    Acciones fija para que Editar/Eliminar siempre queden a mano. ─── */
 .erp-table-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #CC9B9A transparent;
+  scrollbar-color: #B9A08F transparent;
 }
 .erp-table-scroll::-webkit-scrollbar { height: 10px; }
-.erp-table-scroll::-webkit-scrollbar-track { background: #F3E7E3; }
+.erp-table-scroll::-webkit-scrollbar-track { background: #F1E5DE; }
 .erp-table-scroll::-webkit-scrollbar-thumb {
-  background: #CC9B9A;
+  background: #B9A08F;
   border-radius: 999px;
-  border: 2px solid #F3E7E3;
+  border: 2px solid #F1E5DE;
 }
 .erp-table-scroll::-webkit-scrollbar-thumb:hover { background: #856564; }
 
@@ -722,7 +722,7 @@ body {
   border-radius: 6px;
   padding: 7px 12px;
   font-size: 13px;
-  color: #374151;
+  color: #3B2A21;
   background: #fff;
   outline: none;
   transition: box-shadow 0.15s, border-color 0.15s;

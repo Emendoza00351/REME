@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Eye, EyeOff, KeyRound, Loader2, User } from 'lucide-react'
 import type { Permisos } from '../context/PermissionsContext'
+import { apiFetch } from '../utils/api'
 
 export type Sesion = {
   id_usuario: number
@@ -27,7 +28,7 @@ export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }
     setError('')
     setCargando(true)
     try {
-      const res = await fetch('/api/login', {
+      const res = await apiFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario, password }),
@@ -62,7 +63,7 @@ export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }
       </svg>
 
       <svg className="login-motif login-motif--rose" viewBox="0 0 100 140" fill="none">
-        <g stroke="#C98F86" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <g stroke="#8B5E3C" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M50 12 C63 11 71 19 68 29 C65 38 54 40 49 34 C46 30 48 24 54 23.5 C57 23 59 26 56.5 28" />
           <path d="M31 30 C23 43 29 56 48 59" />
           <path d="M69 30 C77 43 71 56 52 59" />
