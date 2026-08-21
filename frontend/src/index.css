@@ -1,0 +1,960 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;900&family=Chivo:wght@400;500;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --bg-page: #EDEDEB;
+  --primary: #5C3A35;
+  --primary-hover: #856564;
+  --text-main: #3B2A21;
+  --accent: #856564;
+  --input-border: #E4E4E1;
+  --row-alt: #FFFFFF;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* El alto fijo vive en .erp-body; html/body/#root solo lo acompañan para que
+   el bloque de contenido pueda calcular su propio scroll interno. */
+html,
+body {
+  height: 100%;
+}
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Chivo', sans-serif;
+  color: var(--text-main);
+  background: linear-gradient(180deg, #F7F0EE 0%, #F1E5E1 100%);
+}
+
+.font-title {
+  font-family: 'Sora', sans-serif;
+}
+
+/* ════════════════════════════════════════════
+   ERP LAYOUT — estructura de bloques (sidebar | encabezado + contenido).
+   El alto lo fija .erp-body: el scroll ocurre SOLO dentro de .erp-content,
+   nunca en la página, para que el bloque de datos no se vaya hacia abajo.
+════════════════════════════════════════════ */
+.erp-body {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  font-family: 'Chivo', sans-serif;
+  background: linear-gradient(180deg, #F7F0EE 0%, #F1E5E1 100%);
+}
+
+/* ─── SIDEBAR ─────────────────────────────── */
+.erp-sidebar {
+  width: 64px;
+  min-width: 64px;
+  border: 1px solid #B87B7A;
+  border-radius: 14px;
+  background: #5C3A35;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 200;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  transition: width 0.14s cubic-bezier(0.4, 0, 0.2, 1),
+              min-width 0.14s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.14s ease;
+}
+.erp-sidebar--expanded {
+  width: 210px;
+  min-width: 210px;
+  box-shadow: 3px 0 20px rgba(42, 29, 22, 0.35);
+}
+
+/* Backdrop del sidebar en mobile: oculto por defecto. */
+.erp-sidebar-backdrop { display: none; }
+
+/* En touch/pantallas angostas el sidebar expandido flota sobre el contenido
+   en vez de empujarlo, para no aplastar la columna derecha. */
+@media (max-width: 899px), (pointer: coarse) {
+  .erp-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 150;
+  }
+  .erp-sidebar--expanded {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    height: calc(100vh - 16px);
+  }
+}
+
+/* Header */
+.erp-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  min-height: 60px;
+  height: 60px;
+  flex-shrink: 0;
+}
+.erp-logo-row {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.erp-logo-icon {
+  height: 36px;
+  width: 36px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 11px;
+  padding: 3px;
+  background: #FFFFFF;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.16);
+}
+.erp-logo-wrap {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.14s, opacity 0.12s;
+}
+.erp-logo-wrap--visible { max-width: 140px; opacity: 1; }
+.erp-logo-wordmark {
+  margin: 0;
+  font-family: 'Sora', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+
+/* Pin button */
+.erp-pin-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+.erp-pin-btn:hover   { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }
+.erp-pin-btn--active { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }
+
+/* Nav */
+.erp-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0;
+}
+.erp-nav::-webkit-scrollbar       { width: 4px; }
+.erp-nav::-webkit-scrollbar-track { background: transparent; }
+.erp-nav::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+
+.erp-nav-group { border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+
+.erp-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0 13px 20px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.18s, color 0.18s;
+}
+.erp-nav-item:hover   { background: rgba(255, 255, 255, 0.1); color: #FFFFFF; }
+.erp-nav-item--active { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+
+.erp-nav-icon {
+  min-width: 20px;
+  width: 20px;
+  color: rgba(255, 255, 255, 0.75);
+  flex-shrink: 0;
+}
+.erp-nav-item:hover .erp-nav-icon,
+.erp-nav-item--active .erp-nav-icon { color: #FFFFFF; }
+
+.erp-nav-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.erp-nav-arrow {
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+.erp-nav-arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.erp-nav-arrow-btn:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Children */
+.erp-nav-children { background: rgba(0, 0, 0, 0.14); }
+
+.erp-nav-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 38px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.erp-nav-child:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+.erp-nav-child--active {
+  background: #FFFFFF;
+  color: #5C3A35;
+  border-left-color: #FFFFFF;
+}
+
+.erp-nav-child-icon { min-width: 18px; width: 18px; color: rgba(255, 255, 255, 0.75); flex-shrink: 0; }
+.erp-nav-child--active .erp-nav-child-icon { color: #5C3A35; }
+
+/* Footer */
+.erp-sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  min-height: 60px;
+  height: 60px;
+  flex-shrink: 0;
+}
+.erp-footer-user {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.erp-footer-user-wrap {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.14s, opacity 0.12s;
+}
+.erp-footer-user-wrap--visible { max-width: 140px; opacity: 1; }
+.erp-footer-user-name {
+  margin: 0;
+  font-family: 'Sora', sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.erp-footer-user-role {
+  margin: 1px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.erp-footer-logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+.erp-footer-logout-btn:hover { background: rgba(255, 255, 255, 0.18); color: #FFFFFF; }
+
+/* ─── COLUMNA DERECHA ─────────────────────── */
+.erp-right-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ─── BLOQUE ENCABEZADO ───────────────────── */
+.erp-header-block {
+  border: 1px solid #EAD8D4;
+  border-radius: 16px;
+  background: #FFFFFF;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(134, 95, 88, 0.08);
+}
+
+/* Top bar */
+.erp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 18px;
+  height: 55px;
+  border-bottom: 1px solid #EAD8D4;
+  background: linear-gradient(90deg, rgba(255,255,255,0.9) 0%, rgba(245,232,228,0.95) 100%);
+  overflow: hidden;
+}
+.erp-topbar-greeting        { font-size: 14px; color: #7A6656; white-space: nowrap; }
+.erp-topbar-greeting strong { color: #3B2A21; font-family: 'Sora', sans-serif; }
+.erp-topbar-right           { display: flex; align-items: center; gap: 14px; }
+.erp-topbar-group           { display: flex; align-items: center; gap: 10px; }
+
+.erp-topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #E4E4E1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #927D6C;
+}
+.erp-topbar-search input {
+  width: 170px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #374151;
+  font-family: inherit;
+  font-size: 13px;
+}
+.erp-topbar-search input::placeholder { color: #B3A093; }
+
+.erp-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3B2A21 0%, #5C3A35 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
+  user-select: none;
+  flex-shrink: 0;
+}
+.erp-avatar--sm { width: 26px; height: 26px; font-size: 12px; cursor: default; }
+
+/* Tab bar */
+.erp-tab-bar {
+  background: linear-gradient(90deg, rgba(255,255,255,0.92) 0%, rgba(246,234,230,0.94) 100%);
+  display: flex;
+  align-items: stretch;
+  min-height: 40px;
+}
+.erp-tab-home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #E4E4E1;
+  color: #7A6656;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+.erp-tab-home:hover   { background: rgba(255, 255, 255, 0.8); color: #3B2A21; }
+.erp-tab-home--active {
+  background: #5C3A35;
+  color: #fff;
+}
+
+.erp-tabs-container {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  flex: 1;
+  gap: 8px;
+  padding: 5px 8px;
+  scrollbar-width: none;
+}
+.erp-tabs-container::-webkit-scrollbar { display: none; }
+
+.erp-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 7px 10px;
+  background: #fff;
+  color: #7A6656;
+  border: 1px solid #E4E4E1;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 190px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background 0.18s, color 0.18s;
+}
+.erp-tab:hover   { background: #FFFFFF; border-color: #D8D8D4; }
+.erp-tab--active {
+  background: #5C3A35;
+  color: #fff;
+  border-color: transparent;
+}
+
+.erp-tab-icon  { flex-shrink: 0; opacity: 0.85; }
+.erp-tab--active .erp-tab-icon { opacity: 1; }
+.erp-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.erp-tab-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 999px;
+  opacity: 0.55;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, opacity 0.15s;
+}
+.erp-tab-close:hover { background: rgba(0, 0, 0, 0.12); opacity: 1; }
+.erp-tab--active .erp-tab-close:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* ─── BLOQUE CONTENIDO ────────────────────── */
+.erp-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #EAD8D4;
+  border-radius: 16px;
+  background: #FFFFFF;
+  box-shadow: 0 16px 40px rgba(125, 90, 84, 0.08);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Mismo motivo que .erp-table-scroll: sin esto, un scrollbar overlay del SO
+     puede dejar contenido (p. ej. el botón Guardar del formulario) fuera de
+     vista sin ninguna pista de que hay más para abajo. */
+  scrollbar-width: thin;
+  scrollbar-color: #CC9B9A transparent;
+}
+.erp-content::-webkit-scrollbar { width: 10px; }
+.erp-content::-webkit-scrollbar-track { background: #F3E7E3; }
+.erp-content::-webkit-scrollbar-thumb {
+  background: #CC9B9A;
+  border-radius: 999px;
+  border: 2px solid #F3E7E3;
+}
+.erp-content::-webkit-scrollbar-thumb:hover { background: #856564; }
+
+.erp-panel {
+  display: none;
+  width: 100%;
+  min-height: 100%;
+  padding: 24px 40px 40px;
+  justify-content: center;
+  align-items: flex-start;
+}
+.erp-panel--active { display: flex; }
+
+/* Los módulos de REME son tarjetas de alto natural: se anclan arriba y el
+   scroll lo resuelve .erp-content, en vez de estirarse y recortar la tabla. */
+.erp-panel--full {
+  padding: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.erp-panel--full > * { width: 100%; }
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .catalog-grid { grid-template-columns: 1fr; }
+}
+
+/* ─── Portada (bienvenida + bloque de datos) ─── */
+.erp-home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.erp-welcome-card {
+  border: 1px solid #E4E4E1;
+  border-radius: 16px;
+  background: #fff;
+  padding: clamp(20px, 5vw, 36px) clamp(16px, 8vw, 60px) clamp(28px, 6vw, 44px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.07);
+  max-width: clamp(340px, 46vw, 820px);
+  width: 100%;
+  text-align: center;
+}
+.erp-welcome-logo    { display: flex; justify-content: center; margin-bottom: 18px; }
+.erp-logo-box        { height: clamp(70px, 18vw, 120px); width: auto; object-fit: contain; }
+.erp-welcome-divider { border: none; border-top: 1px solid #E4E4E1; margin: 20px 0; }
+.erp-welcome-title {
+  font-family: 'Sora', sans-serif;
+  font-size: clamp(26px, 7vw, 42px);
+  font-weight: 700;
+  color: #3B2A21;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+}
+.erp-welcome-sub {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #7A6656;
+}
+
+.erp-resumen {
+  width: 100%;
+  max-width: 1400px;
+  margin: 10px auto 0;
+  border: 1px solid #E4E4E1;
+  border-radius: 16px;
+  background: #FFFFFF;
+  padding: 12px 16px;
+}
+.erp-resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px 14px;
+}
+.erp-resumen-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #E4E4E1;
+  border-left: 4px solid #5C3A35;
+  border-radius: 12px;
+  background: #FFFFFF;
+  padding: 8px 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.erp-resumen-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.1);
+}
+.erp-resumen-item-head { display: flex; align-items: center; gap: 6px; }
+.erp-resumen-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(204, 155, 154, 0.15);
+  color: #856564;
+}
+.erp-resumen-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7A6656;
+  white-space: nowrap;
+}
+.erp-resumen-item-value {
+  font-family: 'Sora', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #3B2A21;
+  white-space: nowrap;
+}
+
+/* ─── Módulo genérico ─── */
+.erp-module-card {
+  border: 1px solid #E4E4E1;
+  border-radius: 16px;
+  background: #fff;
+  padding: 40px 50px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.07);
+  max-width: 700px;
+  width: 100%;
+}
+.erp-module-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #E4E4E1;
+}
+.erp-module-icon-wrap {
+  width: 48px;
+  height: 48px;
+  background: #5C3A35;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.erp-module-header h2 { font-size: 20px; font-weight: 700; color: #3B2A21; margin: 0; }
+.erp-module-body      { color: #7A6656; font-size: 14px; line-height: 1.7; display: flex; flex-direction: column; gap: 8px; }
+
+/* ─── Tablas de módulo: scroll horizontal siempre visible (no depende de
+   overlay-scrollbars del SO, que dejaban la columna Acciones "escondida"
+   sin ninguna pista de que había más contenido a la derecha) + columna de
+   Acciones fija para que Editar/Eliminar siempre queden a mano. ─── */
+.erp-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #CC9B9A transparent;
+}
+.erp-table-scroll::-webkit-scrollbar { height: 10px; }
+.erp-table-scroll::-webkit-scrollbar-track { background: #F3E7E3; }
+.erp-table-scroll::-webkit-scrollbar-thumb {
+  background: #CC9B9A;
+  border-radius: 999px;
+  border: 2px solid #F3E7E3;
+}
+.erp-table-scroll::-webkit-scrollbar-thumb:hover { background: #856564; }
+
+.erp-col-acciones { box-shadow: -6px 0 8px -6px rgba(59, 42, 33, 0.18); }
+
+/* ─── Inputs numéricos sin flechas de spin ─── */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner { -moz-appearance: textfield; }
+
+/* ─── Campos de formulario compartidos ─── */
+.field {
+  width: 100%;
+  border: 1px solid #E4E4E1;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: #374151;
+  background: #fff;
+  outline: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.field:focus {
+  border-color: #856564;
+  box-shadow: 0 0 0 2px rgba(133, 101, 100, 0.2);
+}
+
+.menu-item {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #E4E4E1;
+  border-radius: 10px;
+  background: #fff;
+  color: #5C4535;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.menu-item:hover {
+  background: #FFFFFF;
+  border-color: #D8D8D4;
+}
+
+.kpi-card {
+  border: 1px solid #E4E4E1;
+  border-radius: 14px;
+  background: #FFFFFF;
+  padding: 14px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.1);
+}
+
+.erp-card {
+  border: 1px solid #E4E4E1;
+  border-radius: 14px;
+  background: #fff;
+  /* Vive dentro de .erp-panel--full (flex-column). Sin flex-shrink:0 el
+     item por defecto puede encogerse bajo su alto de contenido natural, y
+     como el propio card tiene overflow-hidden (CrudModule), lo que no
+     entra se recorta en silencio en vez de hacer overflow en .erp-content
+     — ahí desaparecían Guardar y las Acciones, sin ningún scrollbar. */
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════════════════
+   LOGIN — pantalla previa al ERP. Fondo con textura de puntada de crochet
+   (óvalos tipo "cadeneta") + dos acentos redondos tipo ovillo de lana,
+   todo en la paleta café/rosado de la marca.
+════════════════════════════════════════════ */
+.login-screen {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+  font-family: 'Chivo', sans-serif;
+  background:
+    radial-gradient(circle at 12% 15%, rgba(139, 94, 60, 0.14), transparent 42%),
+    radial-gradient(circle at 90% 85%, rgba(201, 143, 134, 0.16), transparent 42%),
+    linear-gradient(160deg, #FBF3EE 0%, #F7EAE1 55%, #F3E1D6 100%);
+}
+
+.login-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.32;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cg fill='none' stroke='%238B5E3C' stroke-width='1.6' stroke-opacity='0.16'%3E%3Cellipse cx='18' cy='18' rx='10' ry='6.5' transform='rotate(-18 18 18)'/%3E%3Cellipse cx='54' cy='54' rx='10' ry='6.5' transform='rotate(-18 54 54)'/%3E%3Cpath d='M28 18c4 0 4 4 8 4s4-4 8-4' stroke-opacity='0.12'/%3E%3Cpath d='M-8 54c4 0 4 4 8 4s4-4 8-4'/%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.login-yarn {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(0.5px);
+  pointer-events: none;
+  opacity: 0.5;
+}
+.login-yarn--a {
+  width: 260px;
+  height: 260px;
+  top: -70px;
+  left: -70px;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 6px, rgba(139, 94, 60, 0.22) 6px 8px);
+}
+.login-yarn--b {
+  width: 340px;
+  height: 340px;
+  bottom: -110px;
+  right: -110px;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 7px, rgba(201, 143, 134, 0.28) 7px 9px);
+}
+
+/* Motivos decorativos — tulipán, rosa y amigurumi, discretos en las esquinas
+   libres de la tarjeta. Trazo simple, sin relleno, opacidad baja a propósito. */
+.login-motif {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.4;
+}
+.login-motif--tulip  { top: 6%;    right: 7%;  width: 92px; }
+.login-motif--rose   { bottom: 8%; left: 6.5%; width: 84px; }
+.login-motif--ami    { top: 12%;  left: 9%;   width: 78px; opacity: 0.32; }
+
+@media (max-width: 900px) {
+  .login-motif { display: none; }
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 380px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #E8D9CE;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(74, 52, 40, 0.14);
+  padding: clamp(24px, 5vw, 40px) clamp(20px, 6vw, 36px) 30px;
+  text-align: center;
+}
+.login-logo { height: 76px; width: auto; object-fit: contain; margin: 0 auto 6px; }
+.login-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #553C23;
+  margin: 4px 0 2px;
+}
+.login-sub {
+  font-size: 12.5px;
+  color: #7A6656;
+  margin: 0 0 22px;
+}
+
+.login-form { display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.login-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5C4535;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.login-input-wrap { position: relative; display: flex; align-items: center; }
+.login-input-wrap > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9C8676;
+  pointer-events: none;
+}
+.login-input-wrap .field { padding-left: 36px; padding-right: 34px; }
+.login-input-wrap button {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9C8676;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  line-height: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.login-input-wrap button:hover { background: #F7EAE1; color: #6B4226; }
+
+.login-error {
+  background: #FFF5EE;
+  border: 1px solid #F0D9CC;
+  color: #9E3F1F;
+  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 16px;
+  margin-top: 4px;
+  background: linear-gradient(135deg, #8B5E3C 0%, #6B4226 100%);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(139, 94, 60, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.login-submit:hover   { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(139, 94, 60, 0.34); }
+.login-submit:disabled { opacity: 0.65; cursor: default; transform: none; }
+
+.login-demo {
+  margin-top: 20px;
+  border-top: 1px solid #EFE0D5;
+  padding-top: 14px;
+  font-size: 11.5px;
+  color: #8A7362;
+}
+.login-demo strong { color: #6B4226; }
+.login-demo code {
+  background: #F7EAE1;
+  border: 1px solid #E8D9CE;
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: #553C23;
+  font-weight: 700;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "reme-backend",
+  "version": "1.0.0",
+  "description": "Backend ERP REME Crochet — Express, almacenamiento en memoria (sin BD todavía)",
+  "type": "module",
+  "main": "src/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "db:setup": "node scripts/setup-db.mjs",
+    "db:migrate": "node scripts/migrate.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "pg": "^8.23.0"
+  }
+}
