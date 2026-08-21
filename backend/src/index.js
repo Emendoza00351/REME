@@ -9,6 +9,7 @@ import rolesRoutes from './routes/roles.js';
 import catalogoRoutes from './routes/catalogo.js';
 import auditoriaRoutes from './routes/auditoria.js';
 import { pool } from './store/db.js';
+import { ejecutarMigracionesPendientes } from './store/migrar.js';
 import { empleados, roles, usuarios, seedBaseSiVacio } from './store/seed.js';
 import { seedCatalogoSiVacio } from './store/catalogo.js';
 import { seedPermisosSiVacio } from './middleware/permisos.js';
@@ -74,6 +75,7 @@ app.use((err, _req, res, _next) => {
 async function arrancar() {
   await pool.query('SELECT 1'); // falla rápido y claro si Postgres no está arriba
 
+  await ejecutarMigracionesPendientes();
   await seedBaseSiVacio();
   const admin = await roles.findBy('nombre', 'ADMIN');
   const gerente = await roles.findBy('nombre', 'GERENTE');
