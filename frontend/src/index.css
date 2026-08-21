@@ -31,7 +31,7 @@ body {
   margin: 0;
   font-family: 'Chivo', sans-serif;
   color: var(--text-main);
-  background: linear-gradient(180deg, #F7F0EE 0%, #F1E5E1 100%);
+  background: var(--bg-page);
 }
 
 .font-title {
@@ -51,7 +51,7 @@ body {
   padding: 8px;
   overflow: hidden;
   font-family: 'Chivo', sans-serif;
-  background: linear-gradient(180deg, #F7F0EE 0%, #F1E5E1 100%);
+  background: var(--bg-page);
 }
 
 /* ─── SIDEBAR ─────────────────────────────── */
