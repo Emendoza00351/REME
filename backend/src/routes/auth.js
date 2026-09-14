@@ -1,10 +1,24 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { empleados, roles, usuarios } from '../store/seed.js';
 import { getPermisosRol, resolverRol, resolverUsuario } from '../middleware/permisos.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
-import { signToken } from '../utils/token.js';
+import { signToken, revocarSesionesDe } from '../utils/token.js';
 import { registrarEvento } from '../store/auditoria.js';
 import { texto } from '../utils/validadores.js';
+
+/* 10 intentos cada 15 min por IP: suficiente margen para errores de tipeo
+   reales, corto para frenar fuerza bruta. Cuenta también los logins
+   exitosos (skipSuccessfulRequests: false) para no dejar la puerta abierta
+   a probar contraseñas hasta acertar y "resetear" el contador acertando de
+   vez en cuando. */
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Probá de nuevo en unos minutos.' },
+});
 
 /* Hash válido de una contraseña que nadie tiene: se compara contra esto
    cuando el usuario no existe, para que verifyPassword() siempre haga el
@@ -39,7 +53,7 @@ async function conSesion(u) {
 }
 
 /* ── POST /api/login ── */
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const usuario = texto(req.body?.usuario).toLowerCase();
     const password = String(req.body?.password ?? '');
@@ -82,6 +96,8 @@ router.post('/logout', async (req, res, next) => {
   try {
     const idUsuario = resolverUsuario(req);
     const idRol = resolverRol(req);
+
+    revocarSesionesDe(idUsuario);
 
     await registrarEvento({
       idUsuario, idRol,

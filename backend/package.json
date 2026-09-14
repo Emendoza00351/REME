@@ -1,7 +1,7 @@
 {
   "name": "reme-backend",
   "version": "1.0.0",
-  "description": "Backend ERP REME Crochet — Express, almacenamiento en memoria (sin BD todavía)",
+  "description": "Backend ERP REME Crochet — Express + PostgreSQL, autenticación JWT",
   "type": "module",
   "main": "src/index.js",
   "private": true,
@@ -10,12 +10,13 @@
     "start": "node src/index.js",
     "db:setup": "node scripts/setup-db.mjs",
     "db:migrate": "node scripts/migrate.mjs",
-    "test": "node --test test/catalog-routes.test.js"
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0"
   }

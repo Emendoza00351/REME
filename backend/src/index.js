@@ -11,14 +11,12 @@ import clientesRoutes from './routes/clientes.js';
 import pedidosRoutes from './routes/pedidos.js';
 import facturacionRoutes from './routes/facturacion.js';
 import resultadosRoutes from './routes/resultados.js';
+import resumenRoutes from './routes/resumen.js';
 import gastosRoutes from './routes/gastos.js';
 import inventarioRoutes from './routes/inventario.js';
 import auditoriaRoutes from './routes/auditoria.js';
-import { pool } from './store/db.js';
-import { ejecutarMigracionesPendientes } from './store/migrar.js';
-import { empleados, roles, usuarios, seedBaseSiVacio } from './store/seed.js';
-import { seedCatalogoSiVacio } from './store/catalogo.js';
-import { seedPermisosSiVacio } from './middleware/permisos.js';
+import { empleados, roles, usuarios } from './store/seed.js';
+import { prepararBaseDeDatos } from './store/inicializar.js';
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -65,6 +63,7 @@ app.use('/api', clientesRoutes);
 app.use('/api', pedidosRoutes);
 app.use('/api', facturacionRoutes);
 app.use('/api', resultadosRoutes);
+app.use('/api', resumenRoutes);
 app.use('/api', gastosRoutes);
 app.use('/api', inventarioRoutes);
 app.use('/api', auditoriaRoutes);
@@ -88,15 +87,7 @@ app.use((err, _req, res, _next) => {
 });
 
 async function arrancar() {
-  await pool.query('SELECT 1'); // falla rápido y claro si Postgres no está arriba
-
-  await ejecutarMigracionesPendientes();
-  await seedBaseSiVacio();
-  const admin = await roles.findBy('nombre', 'ADMIN');
-  const gerente = await roles.findBy('nombre', 'GERENTE');
-  const vendedor = await roles.findBy('nombre', 'VENDEDOR');
-  await seedPermisosSiVacio(admin.id_rol, gerente.id_rol, vendedor.id_rol);
-  await seedCatalogoSiVacio();
+  await prepararBaseDeDatos();
 
   app.listen(PORT, () => {
     console.log(`REME backend escuchando en http://localhost:${PORT}`);
