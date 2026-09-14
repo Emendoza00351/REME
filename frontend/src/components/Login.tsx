@@ -96,7 +96,12 @@ export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }
         <p className="login-sub">Iniciá sesión para entrar al panel de REME</p>
 
         <form className="login-form" onSubmit={submit}>
-          {error && <div className="login-error">{error}</div>}
+          {/* Siempre montado (solo se oculta con "hidden") en vez de
+              condicionar el propio nodo: insertar un div nuevo como primer
+              hijo del form, justo encima de los inputs, es el patrón exacto
+              que hace crashear a React con "insertBefore" cuando un gestor
+              de contraseñas del navegador ya metió mano en esos inputs. */}
+          <div className="login-error" hidden={!error}>{error}</div>
 
           <div>
             <label className="login-label" htmlFor="login-usuario">Usuario</label>
@@ -136,8 +141,8 @@ export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }
           </div>
 
           <button className="login-submit" type="submit" disabled={cargando}>
-            {cargando ? <Loader2 size={16} className="animate-spin" /> : null}
-            {cargando ? 'Ingresando…' : 'Iniciar sesión'}
+            <span hidden={!cargando}><Loader2 size={16} className="animate-spin" /></span>
+            <span>{cargando ? 'Ingresando…' : 'Iniciar sesión'}</span>
           </button>
         </form>
 
