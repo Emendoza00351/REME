@@ -49,7 +49,8 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
   const [productionForm, setProductionForm] = useState({ codigoBarras: '', marca: '', color: '', codigoColor: '', tamano: '', totalGramos: '', pesoInicial: '', pesoFinal: '', unidadesProducidas: '', observacion: '' })
 
   useEffect(() => {
-    apiFetch('/api/productos')
+    const controller = new AbortController()
+    apiFetch('/api/productos', { signal: controller.signal })
       .then((res) => res.ok ? res.json() : Promise.reject(new Error('No se pudieron cargar los productos')))
       .then((rows) => setProducts(rows.map((row: Record<string, any>) => ({
         id: Number(row.id ?? row.id_producto ?? 0),
@@ -58,22 +59,27 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
         precio: Number(row.precio_venta ?? row.precioVenta ?? 0),
         foto: String(row.foto_url ?? row.fotoUrl ?? DEFAULT_PRODUCTS[0].foto),
       }))))
-      .catch(() => setProducts(DEFAULT_PRODUCTS))
+      .catch(() => { if (!controller.signal.aborted) setProducts(DEFAULT_PRODUCTS) })
+    return () => controller.abort()
   }, [command.id])
 
   useEffect(() => {
     if (screen !== 'orders') return
-    apiFetch('/api/pedidos')
+    const controller = new AbortController()
+    apiFetch('/api/pedidos', { signal: controller.signal })
       .then((res) => res.ok ? res.json() : Promise.reject(new Error('No se pudieron cargar los pedidos')))
       .then((rows) => setOrders(Array.isArray(rows) ? rows.slice().reverse() : []))
-      .catch(() => setOrders([]))
+      .catch(() => { if (!controller.signal.aborted) setOrders([]) })
+    return () => controller.abort()
   }, [screen, command.id])
 
   useEffect(() => {
-    apiFetch('/api/inventario')
+    const controller = new AbortController()
+    apiFetch('/api/inventario', { signal: controller.signal })
       .then((res) => res.ok ? res.json() : Promise.reject(new Error('No se pudo cargar el inventario')))
       .then((rows) => setInventoryItems(Array.isArray(rows) ? rows : []))
-      .catch(() => setInventoryItems([]))
+      .catch(() => { if (!controller.signal.aborted) setInventoryItems([]) })
+    return () => controller.abort()
   }, [command.id])
 
   const loadOrders = async () => {
@@ -84,17 +90,21 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
   }
 
   useEffect(() => {
-    apiFetch('/api/clientes')
+    const controller = new AbortController()
+    apiFetch('/api/clientes', { signal: controller.signal })
       .then((res) => res.ok ? res.json() : Promise.reject(new Error('No se pudieron cargar los clientes')))
       .then((rows) => setClientes(rows.map((row: Record<string, any>) => String(row.nombre ?? '')).filter(Boolean)))
-      .catch(() => setClientes([]))
+      .catch(() => { if (!controller.signal.aborted) setClientes([]) })
+    return () => controller.abort()
   }, [command.id])
 
   useEffect(() => {
-    apiFetch('/api/pedidos')
+    const controller = new AbortController()
+    apiFetch('/api/pedidos', { signal: controller.signal })
       .then((res) => res.ok ? res.json() : Promise.reject(new Error('No se pudieron cargar los pedidos')))
       .then((rows) => setNumeroPedido(rows.reduce((max: number, row: Record<string, any>) => Math.max(max, Number(row.id_pedido ?? row.id ?? 0)), 0) + 1))
-      .catch(() => setNumeroPedido(null))
+      .catch(() => { if (!controller.signal.aborted) setNumeroPedido(null) })
+    return () => controller.abort()
   }, [command.id])
 
   const visibleProducts = useMemo(() => {

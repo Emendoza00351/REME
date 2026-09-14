@@ -1,15 +1,12 @@
 import { Router } from 'express';
 import { empleados, usuarios } from '../store/seed.js';
 import { requirePermission } from '../middleware/permisos.js';
+import { CORREO_RE, ESTADOS, texto } from '../utils/validadores.js';
 
 const router = Router();
 
 // Formato de identidad hondureña: 0000-0000-00000
 const DNI_RE = /^\d{4}-\d{4}-\d{5}$/;
-const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ESTADOS = ['Activo', 'Inactivo'];
-
-const texto = (v) => String(v ?? '').trim();
 
 function validar(body, { parcial = false } = {}) {
   const errores = [];

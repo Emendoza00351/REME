@@ -41,14 +41,23 @@ export default function AuditoriaModule() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    apiFetch('/api/auditoria')
+    const controller = new AbortController()
+
+    apiFetch('/api/auditoria', { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('No se pudo cargar la bitácora')
         return res.json()
       })
       .then((rows) => setEventos(Array.isArray(rows) ? rows : []))
-      .catch(() => setError('No se pudo cargar la bitácora.'))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setError('No se pudo cargar la bitácora.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
   }, [])
 
   const { pageLimit, setPageLimit, paginaActual, totalPaginas, pageItems, irAnterior, irSiguiente } =

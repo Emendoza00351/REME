@@ -2,14 +2,11 @@ import { Router } from 'express';
 import { empleados, roles, usuarios } from '../store/seed.js';
 import { requirePermission } from '../middleware/permisos.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
+import { CORREO_RE, ESTADOS, texto } from '../utils/validadores.js';
 
 const router = Router();
 
-const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ESTADOS = ['Activo', 'Inactivo'];
 const MIN_PASSWORD = 8;
-
-const texto = (v) => String(v ?? '').trim();
 
 /* El hash nunca sale del backend. */
 const publico = ({ password_hash, ...resto }) => resto;

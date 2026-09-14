@@ -15,16 +15,23 @@ export default function FacturacionModule({ command }: { command: ModuleCommand 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const loadInvoices = () => {
+  const loadInvoices = (signal?: AbortSignal) => {
     setLoading(true)
-    apiFetch('/api/facturacion')
+    apiFetch('/api/facturacion', signal ? { signal } : {})
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('No se pudieron cargar las facturas')))
       .then((rows) => setInvoices(Array.isArray(rows) ? rows : []))
-      .catch((error) => setMessage(error instanceof Error ? error.message : 'No se pudieron cargar las facturas'))
-      .finally(() => setLoading(false))
+      .catch((error) => {
+        if (signal?.aborted) return
+        setMessage(error instanceof Error ? error.message : 'No se pudieron cargar las facturas')
+      })
+      .finally(() => { if (!signal?.aborted) setLoading(false) })
   }
 
-  useEffect(() => { loadInvoices() }, [command.id])
+  useEffect(() => {
+    const controller = new AbortController()
+    loadInvoices(controller.signal)
+    return () => controller.abort()
+  }, [command.id])
 
   const openInvoice = (invoice: Invoice) => {
     if (selected?.id === invoice.id) {

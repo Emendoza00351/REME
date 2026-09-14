@@ -1,4 +1,5 @@
-import { createTable } from './db.js';
+import { createTable, withTransaction } from './db.js';
+import { texto } from '../utils/validadores.js';
 
 export const productos = createTable('productos', 'id_producto');
 export const pedidos = createTable('pedidos', 'id_pedido');
@@ -6,6 +7,62 @@ export const inventario = createTable('inventario', 'id_inventario');
 export const clientes = createTable('clientes', 'id_cliente');
 export const gastos = createTable('gastos', 'id_gasto');
 export const consumosInventario = createTable('consumos_inventario', 'id_consumo');
+
+export function errorConEstado(mensaje, status) {
+  const err = new Error(mensaje);
+  err.status = status;
+  return err;
+}
+
+/**
+ * Lee y actualiza el inventario dentro de una transacción con
+ * `SELECT ... FOR UPDATE`, para que dos compras/consumos concurrentes del
+ * mismo código de barras no lean la misma existencia y dejen el stock
+ * inconsistente (una de las dos debe esperar a que la otra libere la fila).
+ * La usan tanto /gastos (compra_inventario) como /consumos.
+ */
+export async function ajustarExistencias(datos, delta) {
+  const codigoBarras = texto(datos.codigo_barras ?? datos.codigoBarras);
+  if (!codigoBarras) throw new Error('La compra para inventario necesita un ID o código de barras');
+
+  return withTransaction(async (client) => {
+    const { rows } = await client.query('SELECT * FROM inventario WHERE codigo_barras = $1 FOR UPDATE', [codigoBarras]);
+    const item = rows[0] ?? null;
+
+    if (!item && delta < 0) return null;
+
+    if (!item) {
+      const codigoColor = texto(datos.codigo_color ?? datos.codigoColor);
+      const insertado = await client.query(
+        `INSERT INTO inventario
+           (codigo_barras, marca, color, codigo_materia_prima, codigo_color, codigo, tamano, cantidad, gr_10, gr_50, gr_100, estado)
+         VALUES ($1, $2, $3, '', $4, $4, $5, $6, 0, 0, 0, 'Activo')
+         RETURNING *`,
+        [codigoBarras, texto(datos.marca), texto(datos.color), codigoColor, texto(datos.tamano), Math.max(Number(delta), 0)],
+      );
+      return insertado.rows[0];
+    }
+
+    const cantidad = Number(item.cantidad ?? 0) + Number(delta);
+    if (cantidad < 0) throw new Error('La reversión dejaría el inventario en negativo');
+
+    const marca = texto(datos.marca || item.marca);
+    const color = texto(datos.color || item.color);
+    const codigoColor = texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo_color);
+    const tamano = texto(datos.tamano || item.tamano);
+    const totalGramos = Number(item.tamano ?? datos.tamano ?? 0) * cantidad;
+
+    const actualizado = await client.query(
+      `UPDATE inventario
+         SET codigo_barras = $1, marca = $2, color = $3, codigo_color = $4, codigo = $4,
+             tamano = $5, cantidad = $6, total_gramos = $7, actualizado_en = now()
+       WHERE id_inventario = $8
+       RETURNING *`,
+      [codigoBarras, marca, color, codigoColor, tamano, cantidad, totalGramos, item.id_inventario],
+    );
+    return actualizado.rows[0];
+  });
+}
 
 /**
  * El formulario de Pedidos todavía pide el nombre del cliente como texto

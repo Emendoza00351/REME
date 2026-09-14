@@ -4,11 +4,9 @@ import {
   ACCIONES, MODULOS, ROL_ADMIN,
   borrarPermisosRol, getPermisosRol, requirePermission, setPermisosRol,
 } from '../middleware/permisos.js';
+import { ESTADOS, texto } from '../utils/validadores.js';
 
 const router = Router();
-
-const ESTADOS = ['Activo', 'Inactivo'];
-const texto = (v) => String(v ?? '').trim();
 
 /* ── Catálogo de módulos y acciones — lo consume la pantalla de permisos ── */
 router.get('/roles/catalogo', requirePermission('roles'), (_req, res) => {

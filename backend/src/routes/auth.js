@@ -4,6 +4,7 @@ import { getPermisosRol, resolverRol, resolverUsuario } from '../middleware/perm
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { signToken } from '../utils/token.js';
 import { registrarEvento } from '../store/auditoria.js';
+import { texto } from '../utils/validadores.js';
 
 /* Hash válido de una contraseña que nadie tiene: se compara contra esto
    cuando el usuario no existe, para que verifyPassword() siempre haga el
@@ -12,8 +13,6 @@ import { registrarEvento } from '../store/auditoria.js';
 const HASH_DUMMY = hashPassword('usuario-inexistente');
 
 const router = Router();
-
-const texto = (v) => String(v ?? '').trim();
 
 /* PermissionsContext del frontend espera un Record<modulo, {ver, crear, ...}>,
    pero getPermisosRol() devuelve un array — se convierte acá para que

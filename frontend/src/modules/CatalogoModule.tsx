@@ -50,7 +50,9 @@ export default function CatalogoModule() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiFetch('/api/productos')
+    const controller = new AbortController()
+
+    apiFetch('/api/productos', { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('No se pudo cargar el catálogo')
         return res.json()
@@ -59,8 +61,15 @@ export default function CatalogoModule() {
         const list = Array.isArray(data) ? data : []
         setItems(list.length > 0 ? list : DEMO_ITEMS)
       })
-      .catch(() => setItems(DEMO_ITEMS))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setItems(DEMO_ITEMS)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
   }, [])
 
   return (
