@@ -24,7 +24,7 @@ export const pool = new pg.Pool({
 // genérica sabe mantener sola, sin que cada ruta tenga que acordarse.
 const TIENE_ACTUALIZADO_EN = new Set([
   'roles', 'empleados', 'usuarios', 'permisos_rol',
-  'clientes', 'productos', 'pedidos', 'inventario',
+  'clientes', 'productos', 'pedidos', 'inventario', 'gastos',
 ]);
 
 function createTable(tabla, pkField) {
@@ -61,7 +61,7 @@ function createTable(tabla, pkField) {
     },
 
     async update(id, data) {
-      const campos = Object.keys(data).filter((c) => c !== pkField);
+      const campos = Object.keys(data).filter((c) => c !== pkField && !(tieneActualizadoEn && c === 'actualizado_en'));
       if (campos.length === 0) return this.find(id);
 
       const sets = campos.map((c, i) => `${c} = $${i + 1}`);

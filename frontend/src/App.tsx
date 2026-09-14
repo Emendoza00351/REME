@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BadgeDollarSign,
-  Barcode,
   BookOpen,
   Boxes,
   ChartNoAxesCombined,
@@ -28,8 +27,8 @@ import {
 } from 'lucide-react'
 import AuditoriaModule from './modules/AuditoriaModule'
 import ClientesModule from './modules/ClientesModule'
-import CodigosModule from './modules/CodigosModule'
 import CatalogoModule from './modules/CatalogoModule'
+import ConsumosModule from './modules/ConsumosModule'
 import { PermissionsProvider } from './context/PermissionsContext'
 import EmpleadosModule from './modules/EmpleadosModule'
 import FacturacionModule from './modules/FacturacionModule'
@@ -52,10 +51,10 @@ const MODULE_TITLES: Record<ModuleKey, string> = {
   ventas: 'Pedidos',
   facturacion: 'Facturación',
   clientes: 'Clientes',
-  codigos: 'Tabla de códigos',
   productos: 'Productos',
   catalogo: 'Catálogo',
   inventario: 'Inventario',
+  consumos: 'Consumos',
   resultados: 'Resultados',
   empleados: 'Empleados',
   usuarios: 'Usuarios',
@@ -68,10 +67,10 @@ const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
   ventas: ShoppingBag,
   facturacion: Receipt,
   clientes: Users,
-  codigos: Barcode,
   productos: PackageSearch,
   catalogo: BookOpen,
   inventario: Boxes,
+  consumos: ClipboardList,
   resultados: ChartNoAxesCombined,
   empleados: IdCard,
   usuarios: KeyRound,
@@ -85,7 +84,7 @@ type MenuItem = { id: string; label: string; Icon: LucideIcon; children: MenuChi
 /* Agrupado siguiendo el origen real de los datos en "REME 2025.xlsx":
    Ventas ← VENTAS · Gastos ← EGRESOS · Productos ← PRODUCTOS ·
    Inventario ← INVENTARIO · Resultados ← ESTADO DE RESULTADOS.
-   Clientes, Facturación y Tabla de códigos se derivan de esas hojas.
+  Clientes y Facturación se derivan de esas hojas.
    "Seguridad" no viene del Excel: son las tablas empleados/usuarios/roles
    que ya existen en la base "reme" (mismo nombre que usa el backend). */
 const MENU_ITEMS: MenuItem[] = [
@@ -108,8 +107,8 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: 'productos',  label: 'Productos',        Icon: PackageSearch },
       { id: 'catalogo',   label: 'Catálogo',         Icon: ClipboardList },
-      { id: 'codigos',    label: 'Tabla de códigos', Icon: Barcode },
       { id: 'inventario', label: 'Inventario',       Icon: Boxes },
+      { id: 'consumos',   label: 'Consumos',         Icon: ClipboardList },
     ],
   },
   {
@@ -136,21 +135,21 @@ const startsCompact = () =>
 
 function App() {
   const [sesion, setSesion] = useState<Sesion | null>(() => leerSesion())
-  const [openTabs, setOpenTabs] = useState<ModuleKey[]>(['ventas'])
-  const [activeTab, setActiveTab] = useState<ModuleKey | null>('ventas')
+  const [openTabs, setOpenTabs] = useState<ModuleKey[]>([])
+  const [activeTab, setActiveTab] = useState<ModuleKey | null>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const [expanded, setExpanded] = useState(() => !startsCompact())
   const [pinned, setPinned] = useState(() => !startsCompact())
-  const [openGroups, setOpenGroups] = useState<string[]>(['administracion', 'clientes-cobros', 'catalogos'])
+  const [openGroups, setOpenGroups] = useState<string[]>([])
   const [commands, setCommands] = useState<Record<ModuleKey, ModuleCommand>>({
     gastos: { id: 0, action: 'table' },
     ventas: { id: 0, action: 'table' },
     facturacion: { id: 0, action: 'table' },
     clientes: { id: 0, action: 'table' },
-    codigos: { id: 0, action: 'table' },
     productos: { id: 0, action: 'table' },
     catalogo: { id: 0, action: 'table' },
     inventario: { id: 0, action: 'table' },
+    consumos: { id: 0, action: 'table' },
     resultados: { id: 0, action: 'table' },
     empleados: { id: 0, action: 'table' },
     usuarios: { id: 0, action: 'table' },
@@ -190,19 +189,20 @@ function App() {
   }
 
   const togglePin = () => {
-    const next = !pinned
+    const next = !expanded
+    setExpanded(next)
     setPinned(next)
-    if (next) {
-      setExpanded(true)
-    } else if (!sidebarRef.current?.matches(':hover')) {
-      setExpanded(false)
-    }
   }
 
   // Tocar el logo con el sidebar colapsado lo abre y lo fija (en touch no hay
   // hover que lo abra); el botón de pin ya cubre cerrarlo.
-  const onLogoTap = () => { if (!expanded) togglePin() }
+  const onLogoTap = () => { if (!expanded) setExpanded(true) }
   const closeMobile = () => { setPinned(false); setExpanded(false) }
+
+  const toggleGroup = (groupId: string) => {
+    if (!expanded) setExpanded(true)
+    setOpenGroups((prev) => (prev.includes(groupId) ? [] : [groupId]))
+  }
 
   // Al navegar en mobile hay que cerrar el overlay para ver el módulo elegido;
   // en desktop "pinned" significa que el usuario quiere el menú abierto.
@@ -229,10 +229,10 @@ function App() {
       ventas: <VentasModule command={commands.ventas} />,
       facturacion: <FacturacionModule command={commands.facturacion} />,
       clientes: <ClientesModule command={commands.clientes} />,
-      codigos: <CodigosModule command={commands.codigos} />,
       productos: <ProductosModule command={commands.productos} />,
       catalogo: <CatalogoModule />,
       inventario: <InventarioModule command={commands.inventario} />,
+      consumos: <ConsumosModule command={commands.consumos} />,
       resultados: <ResultadosModule command={commands.resultados} />,
       empleados: <EmpleadosModule command={commands.empleados} />,
       usuarios: <UsuariosModule command={commands.usuarios} />,
@@ -254,8 +254,6 @@ function App() {
         {/* ─── SIDEBAR ─── */}
         <aside
           ref={sidebarRef}
-          onMouseEnter={() => { if (!startsCompact()) setExpanded(true) }}
-          onMouseLeave={() => { if (!startsCompact() && !pinned) setExpanded(false) }}
           className={`erp-sidebar ${expanded ? 'erp-sidebar--expanded' : ''}`}
         >
           <div className="erp-sidebar-header">
@@ -265,15 +263,14 @@ function App() {
                 <p className="erp-logo-wordmark">REME</p>
               </div>
             </div>
-            {expanded && (
-              <button
-                onClick={togglePin}
-                className={`erp-pin-btn ${pinned ? 'erp-pin-btn--active' : ''}`}
-                title={pinned ? 'Soltar menú' : 'Fijar menú'}
-              >
-                {pinned ? <Minimize2 size={16} /> : <Expand size={16} />}
-              </button>
-            )}
+            <button
+              onClick={togglePin}
+              className={`erp-pin-btn ${pinned ? 'erp-pin-btn--active' : ''}`}
+              title={expanded ? 'Contraer menú' : 'Expandir menú'}
+              aria-label={expanded ? 'Contraer menú' : 'Expandir menú'}
+            >
+              {expanded ? <Minimize2 size={16} /> : <Expand size={16} />}
+            </button>
           </div>
 
           <nav className="erp-nav">
@@ -282,11 +279,7 @@ function App() {
               return (
                 <div key={item.id} className="erp-nav-group">
                   <button
-                    onClick={() => setOpenGroups((prev) =>
-                      prev.includes(item.id)
-                        ? prev.filter((group) => group !== item.id)
-                        : [...prev, item.id],
-                    )}
+                    onClick={() => toggleGroup(item.id)}
                     className="erp-nav-item"
                   >
                     <item.Icon size={16} className="erp-nav-icon" />

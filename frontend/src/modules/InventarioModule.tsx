@@ -3,32 +3,34 @@ import type { RowRecord } from '../components/CrudModule'
 import type { ModuleCommand } from '../types/module'
 
 const DEFAULT_ROWS: RowRecord[] = [
-  { id: 1, marca: 'IMPROTECA', color: 'GRIS', gr10: 8, gr50: 0, gr100: 0, cantidad: 8 },
-  { id: 2, marca: 'IMPROTECA', color: 'MORADO OSCURO', gr10: 5, gr50: 0, gr100: 0, cantidad: 5 },
-  { id: 3, marca: 'DETODO', color: 'AZUL MARINO', gr10: 0, gr50: 0, gr100: 1, cantidad: 1 },
-  { id: 4, marca: 'DOLLY', color: 'AZUL CIELO', gr10: 0, gr50: 0, gr100: 0.5, cantidad: 0.5 },
-  { id: 5, marca: 'IMPROTECA', color: 'BLANCO', gr10: 9, gr50: 0, gr100: 0, cantidad: 9 },
+  { id: 1, codigoBarras: '750100000001', marca: 'IMPROTECA', color: 'GRIS', codigoColor: 'GR-01', tamano: 10, cantidad: 8, totalGramos: 80 },
+  { id: 2, codigoBarras: '750100000002', marca: 'IMPROTECA', color: 'MORADO OSCURO', codigoColor: 'MO-01', tamano: 10, cantidad: 5, totalGramos: 50 },
+  { id: 3, codigoBarras: '750100000003', marca: 'DETODO', color: 'AZUL MARINO', codigoColor: 'AM-01', tamano: 100, cantidad: 1, totalGramos: 100 },
+  { id: 4, codigoBarras: '750100000004', marca: 'DOLLY', color: 'AZUL CIELO', codigoColor: 'AC-01', tamano: 100, cantidad: 0.5, totalGramos: 50 },
+  { id: 5, codigoBarras: '750100000005', marca: 'IMPROTECA', color: 'BLANCO', codigoColor: 'BL-01', tamano: 10, cantidad: 9, totalGramos: 90 },
 ]
 
 export default function InventarioModule({ command }: { command: ModuleCommand }) {
   const normalizeRow = (row: Record<string, any>): RowRecord => ({
     id: Number(row.id ?? row.id_inventario ?? 0),
+    codigoBarras: row.codigo_barras ?? row.codigoBarras ?? '',
     marca: row.marca ?? '',
     color: row.color ?? '',
-    gr10: Number(row.gr_10 ?? row.gr10 ?? 0),
-    gr50: Number(row.gr_50 ?? row.gr50 ?? 0),
-    gr100: Number(row.gr_100 ?? row.gr100 ?? 0),
+    codigoColor: row.codigo_color ?? row.codigoColor ?? '',
+    tamano: Number(row.tamano ?? row.tamano_cm ?? 0),
     cantidad: Number(row.cantidad ?? 0),
+    totalGramos: Number(row.total_gramos ?? row.totalGramos ?? Number(row.tamano ?? row.tamano_cm ?? 0) * Number(row.cantidad ?? 0)),
     estado: row.estado ?? 'Activo',
   })
 
   const serializePayload = (payload: Record<string, string | number>) => ({
+    codigo_barras: String(payload.codigoBarras ?? ''),
     marca: payload.marca,
     color: payload.color,
-    gr_10: Number(payload.gr10 ?? 0),
-    gr_50: Number(payload.gr50 ?? 0),
-    gr_100: Number(payload.gr100 ?? 0),
+    codigo_color: String(payload.codigoColor ?? ''),
+    tamano: Number(payload.tamano ?? 0),
     cantidad: Number(payload.cantidad ?? 0),
+    total_gramos: Number(payload.totalGramos ?? Number(payload.tamano ?? 0) * Number(payload.cantidad ?? 0)),
     estado: payload.estado ?? 'Activo',
   })
 
@@ -42,22 +44,27 @@ export default function InventarioModule({ command }: { command: ModuleCommand }
       normalizeRow={normalizeRow}
       serializePayload={serializePayload}
       tableColumns={[
+        { label: 'ID', key: 'codigoBarras' },
         { label: 'Marca', key: 'marca' },
         { label: 'Color', key: 'color' },
-        { label: '10 g', key: 'gr10' },
-        { label: '50 g', key: 'gr50' },
-        { label: '100 g', key: 'gr100' },
+        { label: 'Código color', key: 'codigoColor' },
+        { label: 'Tamaño (gramos)', key: 'tamano' },
         { label: 'Cantidad', key: 'cantidad' },
+        { label: 'Total de gramos', key: 'totalGramos' },
       ]}
       formFields={[
+        { key: 'codigoBarras', label: 'ID', type: 'barcode', required: true },
         { key: 'marca', label: 'Marca', type: 'text', required: true },
         { key: 'color', label: 'Color', type: 'text', required: true },
-        { key: 'gr10', label: '10 g', type: 'number', required: false },
-        { key: 'gr50', label: '50 g', type: 'number', required: false },
-        { key: 'gr100', label: '100 g', type: 'number', required: false },
+        { key: 'codigoColor', label: 'Código de color', type: 'text', required: true },
+        { key: 'tamano', label: 'Tamaño (gramos)', type: 'number', required: true },
         { key: 'cantidad', label: 'Cantidad', type: 'number', required: true },
+        { key: 'totalGramos', label: 'Total de gramos', type: 'number', required: false, readOnly: true },
       ]}
       initialRows={DEFAULT_ROWS}
+      deriveForm={(form) => ({
+        totalGramos: (Number(form.tamano || 0) * Number(form.cantidad || 0)).toFixed(2),
+      })}
     />
   )
 }

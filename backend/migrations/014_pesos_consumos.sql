@@ -1,0 +1,5 @@
+ALTER TABLE consumos_inventario
+  ADD COLUMN codigo_pedido INTEGER REFERENCES pedidos (id_pedido) ON DELETE SET NULL,
+  ADD COLUMN peso_inicial NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN peso_final NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ADD COLUMN peso_consumido NUMERIC(12,2) NOT NULL DEFAULT 0;

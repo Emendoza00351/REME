@@ -1,0 +1,2 @@
+ALTER TABLE productos
+  ADD COLUMN tamano_cm NUMERIC(12,2) NOT NULL DEFAULT 0;

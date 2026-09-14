@@ -56,7 +56,7 @@ export default function AuditoriaModule() {
 
   return (
     <div className="erp-card overflow-hidden">
-      <div className="border-b border-[#E4E4E1] bg-[#5C3A35] px-4 py-3 text-white">
+      <div className="border-b border-[#E4E4E1] bg-[#80613E] px-4 py-3 text-white">
         <h2 className="font-title text-[18px] font-semibold uppercase tracking-[0.03em]">Bitácora</h2>
         <p className="mt-0.5 text-[12px] text-[#F3E1D6]">Registro de lo que hace cada usuario en el sistema</p>
       </div>

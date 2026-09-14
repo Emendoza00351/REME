@@ -10,12 +10,36 @@ const DEFAULT_ROWS: RowRecord[] = [
 ]
 
 export default function ClientesModule({ command }: { command: ModuleCommand }) {
+  const normalizeRow = (row: Record<string, any>): RowRecord => ({
+    id: Number(row.id ?? row.id_cliente ?? 0),
+    cliente: row.nombre ?? row.cliente ?? '',
+    telefono: row.telefono ?? 'NA',
+    app: row.app ?? '',
+    direccion: row.direccion ?? '',
+    cpFrecuente: Number(row.cp_frecuente ?? row.cpFrecuente ?? 0),
+    estadoUltimo: row.estado_ultimo_pedido ?? row.estadoUltimo ?? 'pendiente',
+    tipoPago: row.tipo_pago ?? row.tipoPago ?? 'Banco',
+  })
+
+  const serializePayload = (payload: Record<string, string | number>) => ({
+    nombre: payload.cliente,
+    telefono: payload.telefono,
+    app: payload.app,
+    direccion: payload.direccion,
+    cp_frecuente: Number(payload.cpFrecuente ?? 0) || null,
+    estado_ultimo_pedido: payload.estadoUltimo,
+    tipo_pago: payload.tipoPago,
+  })
+
   return (
     <CrudModule
       moduleKey="clientes"
       title="Panel de Clientes"
       subtitle="Directorio comercial derivado de la hoja VENTAS"
       command={command}
+      apiUrl="/api/clientes"
+      normalizeRow={normalizeRow}
+      serializePayload={serializePayload}
       tableColumns={[
         { label: 'Cliente', key: 'cliente' },
         { label: 'Telefono', key: 'telefono' },

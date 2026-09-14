@@ -68,7 +68,7 @@ export default function CatalogoModule() {
       <div className="mb-4 flex items-center justify-between gap-2 border-b border-[#E4E4E1] pb-3">
         <div>
           <h2 className="font-title text-[18px] font-semibold uppercase tracking-[0.03em] text-[#3B2A21]">Catálogo</h2>
-          <p className="text-[12px] text-[#7A6656]">Productos con foto y precio</p>
+          <p className="text-[12px] text-[#7A6656]">Vista de productos administrados en Productos</p>
         </div>
       </div>
 
@@ -90,7 +90,7 @@ export default function CatalogoModule() {
                 key={item.id ?? item.id_producto ?? item.cproducto ?? Math.random()}
                 className="overflow-hidden rounded-[22px] border border-[#F0E3E1] bg-white shadow-[0_8px_24px_rgba(124,90,86,0.08)] transition-transform duration-200 hover:-translate-y-1"
               >
-                <div className="relative h-64 w-full overflow-hidden bg-[#F8F3F1]">
+                <div className="relative h-48 w-full overflow-hidden bg-[#F8F3F1]">
                   <img
                     src={imagen}
                     alt={nombre}
@@ -99,16 +99,16 @@ export default function CatalogoModule() {
                       event.currentTarget.src = FLOWER_IMAGES[index % FLOWER_IMAGES.length] || FALLBACK_IMAGE
                     }}
                   />
-                  <div className="absolute left-3 top-3 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#856564] backdrop-blur-sm">
+                  <div className="absolute left-3 top-3 rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#99784F] backdrop-blur-sm">
                     {nombre.toLowerCase().includes('tul') ? 'Tulipán' : nombre.toLowerCase().includes('rosa') ? 'Rosa' : 'Flor'}
                   </div>
                 </div>
 
-                <div className="space-y-2 p-3.5">
-                  <h3 className="line-clamp-2 min-h-[42px] text-[15px] font-semibold text-[#3B2A21]">{nombre}</h3>
-                  <div className="flex items-center justify-between rounded-xl bg-[#FFF9F7] px-2.5 py-2">
+                <div className="space-y-1 p-3">
+                  <h3 className="line-clamp-2 text-[14px] font-semibold leading-tight text-[#3B2A21]">{nombre}</h3>
+                  <div className="flex items-center justify-between rounded-xl bg-[#FFF9F7] px-2 py-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8A7362]">Precio</span>
-                    <span className="text-[18px] font-bold text-[#856564]">{formatearPrecio(precio)}</span>
+                    <span className="text-[18px] font-bold text-[#99784F]">{formatearPrecio(precio)}</span>
                   </div>
                 </div>
               </div>

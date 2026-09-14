@@ -1,10 +1,77 @@
 import { Router } from 'express';
-import { productos, pedidos, inventario, resolverIdCliente } from '../store/catalogo.js';
+import { productos, pedidos, inventario, clientes, gastos, consumosInventario, resolverIdCliente } from '../store/catalogo.js';
 import { requirePermission } from '../middleware/permisos.js';
 
 const router = Router();
 
 const texto = (v) => String(v ?? '').trim();
+
+const esCompra = (body = {}) => (body.tipo_movimiento || body.tipoMovimiento) === 'compra_inventario';
+
+async function ajustarExistencias(datos, delta) {
+  const codigoBarras = texto(datos.codigo_barras ?? datos.codigoBarras);
+  if (!codigoBarras) throw new Error('La compra para inventario necesita un ID o código de barras');
+
+  let item = await inventario.findBy('codigo_barras', codigoBarras);
+  if (!item && delta < 0) return null;
+
+  if (!item) {
+    item = await inventario.insert({
+      codigo_barras: codigoBarras,
+      marca: texto(datos.marca),
+      color: texto(datos.color),
+      codigo_materia_prima: '',
+      codigo_color: texto(datos.codigo_color ?? datos.codigoColor),
+      codigo: texto(datos.codigo_color ?? datos.codigoColor),
+      tamano: texto(datos.tamano),
+      cantidad: Math.max(Number(delta), 0),
+      gr_10: 0,
+      gr_50: 0,
+      gr_100: 0,
+      estado: 'Activo',
+    });
+    return item;
+  }
+
+  const cantidad = Number(item.cantidad ?? 0) + Number(delta);
+  if (cantidad < 0) throw new Error('La reversión dejaría el inventario en negativo');
+  return inventario.update(item.id_inventario, {
+    codigo_barras: codigoBarras,
+    marca: texto(datos.marca || item.marca),
+    color: texto(datos.color || item.color),
+    codigo_color: texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo_color),
+    codigo: texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo),
+    tamano: texto(datos.tamano || item.tamano),
+    cantidad,
+    total_gramos: Number(item.tamano ?? datos.tamano ?? 0) * cantidad,
+  });
+}
+
+function calcularProducto(body, anterior = {}) {
+  const tiempoHoras = Number(body.tiempo_horas ?? body.tiempoHoras ?? anterior.tiempo_horas ?? 0);
+  const precioHora = Number(body.precio_hora ?? body.precioHora ?? anterior.precio_hora ?? 0);
+  const materiales = Number(body.materiales ?? body.costo_materiales ?? anterior.materiales ?? anterior.costo_materiales ?? 0);
+  const empaque = Number(body.empaque ?? anterior.empaque ?? 0);
+  const otros = Number(body.otros ?? anterior.otros ?? 0);
+  const porcentajeGanancia = Number(String(body.porcentaje_ganancia ?? body.porcentajeGanancia ?? anterior.porcentaje_ganancia ?? 0).replace('%', '')) || 0;
+  const manoObra = tiempoHoras * precioHora;
+  const costoProduccion = manoObra + materiales + empaque + otros;
+  const ganancia = costoProduccion * porcentajeGanancia / 100;
+
+  return {
+    tiempo_horas: tiempoHoras,
+    precio_hora: precioHora,
+    mano_obra: manoObra,
+    materiales,
+    empaque,
+    otros,
+    costo_materiales: materiales + empaque,
+    costo_produccion: costoProduccion,
+    porcentaje_ganancia: porcentajeGanancia,
+    ganancia,
+    precio_venta: costoProduccion + ganancia,
+  };
+}
 
 const resolverPedido = (body = {}) => {
   const items = Array.isArray(body.items) ? body.items : [];
@@ -51,23 +118,70 @@ router.get('/productos/:id', requirePermission('productos'), async (req, res, ne
   } catch (err) { next(err); }
 });
 
+router.get('/clientes', requirePermission('clientes'), async (req, res, next) => {
+  try {
+    const query = texto(req.query.q).toLowerCase();
+    const rows = await clientes.list({ orderBy: 'nombre' });
+    res.json(query ? rows.filter((row) => texto(row.nombre).toLowerCase().includes(query)) : rows);
+  } catch (err) { next(err); }
+});
+
+router.post('/clientes', requirePermission('clientes', 'crear'), async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const nombre = texto(body.nombre ?? body.cliente);
+    if (!nombre) return res.status(400).json({ error: 'El nombre del cliente es obligatorio' });
+    const item = await clientes.insert({
+      nombre,
+      telefono: texto(body.telefono),
+      app: texto(body.app),
+      direccion: texto(body.direccion),
+      cp_frecuente: Number(body.cp_frecuente ?? body.cpFrecuente ?? 0) || null,
+      estado_ultimo_pedido: body.estado_ultimo_pedido || body.estadoUltimo || 'pendiente',
+      tipo_pago: body.tipo_pago || body.tipoPago || 'Banco',
+    });
+    res.status(201).json(item);
+  } catch (err) { next(err); }
+});
+
+router.put('/clientes/:id', requirePermission('clientes', 'editar'), async (req, res, next) => {
+  try {
+    const item = await clientes.find(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const body = req.body || {};
+    const updated = await clientes.update(item.id_cliente, {
+      ...body,
+      nombre: texto(body.nombre ?? body.cliente ?? item.nombre),
+      cp_frecuente: Number(body.cp_frecuente ?? body.cpFrecuente ?? item.cp_frecuente ?? 0) || null,
+      tipo_pago: body.tipo_pago || body.tipoPago || item.tipo_pago,
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+router.delete('/clientes/:id', requirePermission('clientes', 'eliminar'), async (req, res, next) => {
+  try {
+    const item = await clientes.find(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Cliente no encontrado' });
+    await clientes.remove(item.id_cliente);
+    res.json({ message: 'Cliente eliminado' });
+  } catch (err) { next(err); }
+});
+
 router.post('/productos', requirePermission('productos', 'crear'), async (req, res, next) => {
   try {
     const body = req.body || {};
     const descripcion = texto(body.descripcion);
     if (!descripcion) return res.status(400).json({ error: 'La descripción es obligatoria' });
+    const existentes = await productos.list({ orderBy: 'cproducto', desc: true });
+    const siguienteCodigo = (Number(existentes[0]?.cproducto) || 0) + 1;
 
+    const calculo = calcularProducto(body);
     const item = await productos.insert({
-      cproducto: Number(body.cproducto ?? 0),
+      cproducto: siguienteCodigo,
       descripcion,
-      mano_obra: Number(body.mano_obra ?? body.manoObra ?? 0),
-      materiales: Number(body.materiales ?? 0),
-      empaque: Number(body.empaque ?? 0),
-      otros: Number(body.otros ?? 0),
-      costo_materiales: Number(body.costo_materiales ?? body.costoMateriales ?? 0),
-      costo_produccion: Number(body.costo_produccion ?? body.costoProduccion ?? 0),
-      ganancia: Number(body.ganancia ?? 0),
-      precio_venta: Number(body.precio_venta ?? body.precioVenta ?? 0),
+      tamano_cm: Number(body.tamano_cm ?? body.tamanoCm ?? 0),
+      ...calculo,
       estado: body.estado || 'Activo',
       foto_url: texto(body.foto_url ?? body.fotoUrl ?? 'https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=500&q=80'),
     });
@@ -81,17 +195,13 @@ router.put('/productos/:id', requirePermission('productos', 'editar'), async (re
     const item = await productos.find(req.params.id);
     if (!item) return res.status(404).json({ error: 'Producto no encontrado' });
 
+    const calculo = calcularProducto(req.body ?? {}, item);
     const updated = await productos.update(item.id_producto, {
       ...item,
       ...req.body,
-      mano_obra: Number(req.body?.mano_obra ?? req.body?.manoObra ?? item.mano_obra ?? 0),
-      materiales: Number(req.body?.materiales ?? item.materiales ?? 0),
-      empaque: Number(req.body?.empaque ?? item.empaque ?? 0),
-      otros: Number(req.body?.otros ?? item.otros ?? 0),
-      costo_materiales: Number(req.body?.costo_materiales ?? req.body?.costoMateriales ?? item.costo_materiales ?? 0),
-      costo_produccion: Number(req.body?.costo_produccion ?? req.body?.costoProduccion ?? item.costo_produccion ?? 0),
-      ganancia: Number(req.body?.ganancia ?? item.ganancia ?? 0),
-      precio_venta: Number(req.body?.precio_venta ?? req.body?.precioVenta ?? item.precio_venta ?? 0),
+      cproducto: item.cproducto,
+      tamano_cm: Number(req.body?.tamano_cm ?? req.body?.tamanoCm ?? item.tamano_cm ?? 0),
+      ...calculo,
       foto_url: texto(req.body?.foto_url ?? req.body?.fotoUrl ?? item.foto_url ?? 'https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=500&q=80'),
     });
 
@@ -145,6 +255,11 @@ router.post('/pedidos', requirePermission('ventas', 'crear'), async (req, res, n
       cantidad: Number(body.cantidad ?? (Array.isArray(body.items) ? body.items.reduce((sum, i) => sum + Number(i.cantidad ?? 1), 0) : 0) ?? 0),
       precio_unidad: Number(body.precio_unidad ?? body.precioUnidad ?? 0),
       total: Number(pedidoMeta.total ?? 0),
+      descuento_porcentaje: Number(body.descuento_porcentaje ?? 0),
+      adelanto: Number(body.adelanto ?? 0),
+      estado_anticipo: body.estado_anticipo === 'pagado' ? 'pagado' : 'pendiente',
+      anticipo_metodo_pago: body.anticipo_metodo_pago || null,
+      anticipo_banco: texto(body.anticipo_banco),
       tiempo_dias: Number(body.tiempo_dias ?? body.tiempoDias ?? 0),
       fecha_entrega: body.fecha_entrega || body.fechaEntrega || null,
       app: texto(body.app),
@@ -154,7 +269,7 @@ router.post('/pedidos', requirePermission('ventas', 'crear'), async (req, res, n
     });
 
     const total = Number(item.total ?? 0);
-    const adelanto = Number(body.adelanto ?? total * 0.5);
+    const adelanto = Number(item.adelanto ?? body.adelanto ?? 0);
     res.status(201).json({
       ...item,
       adelanto,
@@ -200,9 +315,23 @@ router.delete('/pedidos/:id', requirePermission('ventas', 'eliminar'), async (re
   } catch (err) { next(err); }
 });
 
+router.post('/pedidos/:id/finalizar', requirePermission('ventas', 'editar'), async (req, res, next) => {
+  try {
+    const item = await pedidos.find(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Pedido no encontrado' });
+    const updated = await pedidos.update(item.id_pedido, {
+      ...item,
+      finalizado: true,
+      finalizado_en: new Date().toISOString(),
+      estado: 'entregado',
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
 router.get('/facturacion', requirePermission('facturacion'), async (_req, res, next) => {
   try {
-    const lista = await pedidos.list({ orderBy: 'id_pedido' });
+    const lista = (await pedidos.list({ orderBy: 'id_pedido' })).filter((pedido) => pedido.finalizado);
     const facturas = lista.map((pedido) => {
       const total = Number(pedido.total ?? 0);
       const adelanto = total * 0.5;
@@ -216,6 +345,9 @@ router.get('/facturacion', requirePermission('facturacion'), async (_req, res, n
         total,
         adelanto,
         saldoRestante,
+        envioRequerido: !!pedido.envio_requerido,
+        costoEnvio: Number(pedido.costo_envio ?? 0),
+        estadoPedido: pedido.finalizado ? 'finalizado' : 'pendiente',
         tipoPago: pedido.tipo_pago || 'Banco',
         canal: pedido.app || '',
         fechaEntrega: pedido.fecha_entrega || '',
@@ -223,6 +355,28 @@ router.get('/facturacion', requirePermission('facturacion'), async (_req, res, n
       };
     });
     res.json(facturas);
+  } catch (err) { next(err); }
+});
+
+router.get('/resultados/resumen', requirePermission('resultados'), async (_req, res, next) => {
+  try {
+    const [listaPedidos, listaGastos] = await Promise.all([
+      pedidos.list({ orderBy: 'id_pedido' }),
+      gastos.list({ orderBy: 'id_gasto' }),
+    ]);
+    const finalizados = listaPedidos.filter((pedido) => pedido.finalizado);
+    const ingresosVentas = finalizados.reduce((sum, pedido) => sum + Number(pedido.total ?? 0) + Number(pedido.costo_envio ?? 0), 0);
+    const anticipos = finalizados.reduce((sum, pedido) => sum + Number(pedido.adelanto ?? 0), 0);
+    const gastosTotal = listaGastos.reduce((sum, gasto) => sum + Number(gasto.total ?? 0), 0);
+    res.json({
+      ingresosVentas,
+      anticipos,
+      cuentasPorCobrar: Math.max(ingresosVentas - anticipos, 0),
+      egresos: gastosTotal,
+      gananciaEstimada: ingresosVentas - gastosTotal,
+      pedidosFinalizados: finalizados.length,
+      gastosRegistrados: listaGastos.length,
+    });
   } catch (err) { next(err); }
 });
 
@@ -312,6 +466,150 @@ router.delete('/facturacion/:id', requirePermission('facturacion', 'eliminar'), 
   } catch (err) { next(err); }
 });
 
+router.get('/gastos', requirePermission('gastos'), async (_req, res, next) => {
+  try {
+    res.json(await gastos.list({ orderBy: 'id_gasto', desc: true }));
+  } catch (err) { next(err); }
+});
+
+router.post('/gastos', requirePermission('gastos', 'crear'), async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const descripcion = texto(body.descripcion);
+    if (!descripcion) return res.status(400).json({ error: 'La descripción es obligatoria' });
+    if (esCompra(body) && !texto(body.codigo_barras ?? body.codigoBarras)) {
+      return res.status(400).json({ error: 'La compra necesita un ID o código de barras' });
+    }
+
+    const cantidad = Number(body.cantidad ?? 1);
+    const precioUnitario = Number(body.precio_unitario ?? body.precioUnit ?? 0);
+    const datos = {
+      fecha: body.fecha || new Date().toISOString().slice(0, 10),
+      tipo_movimiento: esCompra(body) ? 'compra_inventario' : 'gasto',
+      descripcion,
+      codigo_barras: texto(body.codigo_barras ?? body.codigoBarras),
+      marca: texto(body.marca),
+      color: texto(body.color),
+      codigo_color: texto(body.codigo_color ?? body.codigoColor),
+      tamano: texto(body.tamano),
+      total_gramos: Number(body.total_gramos ?? body.totalGramos ?? Number(body.tamano ?? 0) * Number(body.cantidad ?? 0)),
+      cantidad,
+      unidad: texto(body.unidad) || 'unidad',
+      precio_unitario: precioUnitario,
+      total: Number(body.total ?? cantidad * precioUnitario),
+      estado: body.estado || 'pagado',
+      tipo_pago: body.tipo_pago || body.tipoPago || 'efectivo',
+    };
+    const stock = esCompra(body) ? await ajustarExistencias(datos, cantidad) : null;
+    const item = await gastos.insert({ ...datos, id_inventario: stock?.id_inventario ?? null });
+    res.status(201).json(item);
+  } catch (err) { next(err); }
+});
+
+router.put('/gastos/:id', requirePermission('gastos', 'editar'), async (req, res, next) => {
+  try {
+    const anterior = await gastos.find(req.params.id);
+    if (!anterior) return res.status(404).json({ error: 'Gasto no encontrado' });
+    const body = req.body || {};
+    const compraNueva = esCompra(body);
+    if (compraNueva && !texto(body.codigo_barras ?? body.codigoBarras)) {
+      return res.status(400).json({ error: 'La compra necesita un ID o código de barras' });
+    }
+    if (anterior.tipo_movimiento === 'compra_inventario') {
+      await ajustarExistencias(anterior, -Number(anterior.cantidad ?? 0));
+    }
+    const cantidad = Number(body.cantidad ?? anterior.cantidad ?? 1);
+    const precioUnitario = Number(body.precio_unitario ?? body.precioUnit ?? anterior.precio_unitario ?? 0);
+    const datos = {
+      ...body,
+      fecha: body.fecha || anterior.fecha,
+      tipo_movimiento: compraNueva ? 'compra_inventario' : 'gasto',
+      descripcion: texto(body.descripcion ?? anterior.descripcion),
+      codigo_barras: texto(body.codigo_barras ?? body.codigoBarras),
+      codigo_color: texto(body.codigo_color ?? body.codigoColor),
+      cantidad,
+      precio_unitario: precioUnitario,
+      total: Number(body.total ?? cantidad * precioUnitario),
+      tipo_pago: body.tipo_pago || body.tipoPago || anterior.tipo_pago,
+      id_inventario: null,
+    };
+    const stock = compraNueva ? await ajustarExistencias(datos, cantidad) : null;
+    const actualizado = await gastos.update(anterior.id_gasto, { ...datos, id_inventario: stock?.id_inventario ?? null });
+    res.json(actualizado);
+  } catch (err) { next(err); }
+});
+
+router.delete('/gastos/:id', requirePermission('gastos', 'eliminar'), async (req, res, next) => {
+  try {
+    const item = await gastos.find(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Gasto no encontrado' });
+    if (item.tipo_movimiento === 'compra_inventario') await ajustarExistencias(item, -Number(item.cantidad ?? 0));
+    await gastos.remove(item.id_gasto);
+    res.json({ message: 'Gasto eliminado' });
+  } catch (err) { next(err); }
+});
+
+router.get('/consumos', requirePermission('inventario'), async (_req, res, next) => {
+  try {
+    res.json(await consumosInventario.list({ orderBy: 'id_consumo', desc: true }));
+  } catch (err) { next(err); }
+});
+
+router.post('/consumos', requirePermission('inventario', 'crear'), async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const codigoBarras = texto(body.codigo_barras ?? body.codigoBarras);
+    const producto = texto(body.producto);
+    const pesoInicial = Number(body.peso_inicial ?? body.pesoInicial ?? 0);
+    const pesoFinal = Number(body.peso_final ?? body.pesoFinal ?? 0);
+    if (!codigoBarras || !producto || pesoInicial <= 0 || pesoFinal < 0 || pesoFinal > pesoInicial) {
+      return res.status(400).json({ error: 'Completa el ID, producto y pesos válidos. El peso final no puede superar al inicial.' });
+    }
+
+    const material = await inventario.findBy('codigo_barras', codigoBarras);
+    if (!material) return res.status(404).json({ error: 'No existe un material con ese ID' });
+    const tamanoRollo = Number(material.tamano ?? 0);
+    if (tamanoRollo <= 0) return res.status(400).json({ error: 'El material no tiene tamaño en gramos configurado' });
+    const pesoConsumido = pesoInicial - pesoFinal;
+    const rollosConsumidos = pesoConsumido / tamanoRollo;
+    if (rollosConsumidos <= 0) return res.status(400).json({ error: 'El peso consumido debe ser mayor que cero' });
+    const existencia = Number(material.cantidad ?? 0);
+    if (existencia < rollosConsumidos) return res.status(400).json({ error: `Inventario insuficiente. Disponible: ${existencia}` });
+
+    const actualizado = await inventario.update(material.id_inventario, { cantidad: existencia - rollosConsumidos });
+    const consumo = await consumosInventario.insert({
+      fecha: body.fecha || new Date().toISOString().slice(0, 10),
+      id_inventario: actualizado.id_inventario,
+      codigo_barras: codigoBarras,
+      codigo_pedido: Number(body.codigo_pedido ?? body.codigoPedido) || null,
+      producto,
+      color: texto(body.color),
+      peso_inicial: pesoInicial,
+      peso_final: pesoFinal,
+      peso_consumido: pesoConsumido,
+      unidades_producidas: Number(body.unidades_producidas ?? body.unidadesProducidas ?? 0),
+      rollos_consumidos: rollosConsumidos,
+      observacion: texto(body.observacion),
+    });
+    res.status(201).json({ ...consumo, inventario_restante: actualizado.cantidad });
+  } catch (err) { next(err); }
+});
+
+router.delete('/consumos/:id', requirePermission('inventario', 'eliminar'), async (req, res, next) => {
+  try {
+    const consumo = await consumosInventario.find(req.params.id);
+    if (!consumo) return res.status(404).json({ error: 'Consumo no encontrado' });
+    const material = await inventario.find(consumo.id_inventario);
+    if (material) {
+      await inventario.update(material.id_inventario, {
+        cantidad: Number(material.cantidad ?? 0) + Number(consumo.rollos_consumidos ?? 0),
+      });
+    }
+    await consumosInventario.remove(consumo.id_consumo);
+    res.json({ message: 'Consumo eliminado e inventario restaurado' });
+  } catch (err) { next(err); }
+});
+
 router.get('/inventario', requirePermission('inventario'), async (_req, res, next) => {
   try {
     res.json(await inventario.list({ orderBy: 'id_inventario' }));
@@ -334,8 +632,13 @@ router.post('/inventario', requirePermission('inventario', 'crear'), async (req,
     if (!marca || !color) return res.status(400).json({ error: 'Marca y color son obligatorios' });
 
     const item = await inventario.insert({
+      codigo_barras: texto(body.codigo_barras ?? body.codigoBarras),
       marca,
       color,
+      codigo_materia_prima: texto(body.codigo_materia_prima ?? body.codigoMateriaPrima ?? body.codigo),
+      codigo_color: texto(body.codigo_color ?? body.codigoColor),
+      codigo: texto(body.codigo),
+      tamano: texto(body.tamano),
       gr_10: Number(body.gr_10 ?? body.gr10 ?? 0),
       gr_50: Number(body.gr_50 ?? body.gr50 ?? 0),
       gr_100: Number(body.gr_100 ?? body.gr100 ?? 0),
@@ -351,7 +654,16 @@ router.put('/inventario/:id', requirePermission('inventario', 'editar'), async (
   try {
     const item = await inventario.find(req.params.id);
     if (!item) return res.status(404).json({ error: 'Inventario no encontrado' });
-    const updated = await inventario.update(item.id_inventario, req.body);
+    const body = req.body || {};
+    const updated = await inventario.update(item.id_inventario, {
+      ...body,
+      codigo_barras: texto(body.codigo_barras ?? body.codigoBarras ?? item.codigo_barras),
+      codigo_materia_prima: texto(body.codigo_materia_prima ?? body.codigoMateriaPrima ?? item.codigo_materia_prima ?? item.codigo),
+      codigo_color: texto(body.codigo_color ?? body.codigoColor ?? item.codigo_color),
+      codigo: texto(body.codigo ?? item.codigo),
+      tamano: texto(body.tamano ?? item.tamano),
+      total_gramos: Number(body.total_gramos ?? body.totalGramos ?? Number(body.tamano ?? item.tamano ?? 0) * Number(body.cantidad ?? item.cantidad ?? 0)),
+    });
     res.json(updated);
   } catch (err) { next(err); }
 });

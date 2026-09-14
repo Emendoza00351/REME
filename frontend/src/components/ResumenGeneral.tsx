@@ -1,5 +1,5 @@
 import {
-  BadgeDollarSign, Barcode, Boxes, ChartNoAxesCombined, PackageSearch, Receipt, ShoppingBag, Users,
+  BadgeDollarSign, Boxes, ChartNoAxesCombined, PackageSearch, Receipt, ShoppingBag, Users,
   type LucideIcon,
 } from 'lucide-react'
 import type { ModuleKey } from '../types/module'
@@ -15,7 +15,6 @@ const TARJETAS: Tarjeta[] = [
   { titulo: 'Ventas',      Icon: ShoppingBag,         module: 'ventas' },
   { titulo: 'Facturación', Icon: Receipt,             module: 'facturacion' },
   { titulo: 'Clientes',    Icon: Users,               module: 'clientes' },
-  { titulo: 'Códigos',     Icon: Barcode,             module: 'codigos' },
   { titulo: 'Productos',   Icon: PackageSearch,       module: 'productos' },
   { titulo: 'Inventario',  Icon: Boxes,               module: 'inventario' },
   { titulo: 'Resultados',  Icon: ChartNoAxesCombined, module: 'resultados' },

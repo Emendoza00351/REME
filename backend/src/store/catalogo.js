@@ -4,6 +4,8 @@ export const productos = createTable('productos', 'id_producto');
 export const pedidos = createTable('pedidos', 'id_pedido');
 export const inventario = createTable('inventario', 'id_inventario');
 export const clientes = createTable('clientes', 'id_cliente');
+export const gastos = createTable('gastos', 'id_gasto');
+export const consumosInventario = createTable('consumos_inventario', 'id_consumo');
 
 /**
  * El formulario de Pedidos todavía pide el nombre del cliente como texto

@@ -21,6 +21,8 @@ export default function FacturacionModule({ command, rows }: { command: ModuleCo
     canal: row.canal ?? row.app ?? '',
     fechaEntrega: row.fechaEntrega ?? row.fecha_entrega ?? '',
     estadoCobro: row.estadoCobro ?? (Number(row.saldoRestante ?? row.saldo_restante ?? 0) <= 0 ? 'cobrado' : 'por cobrar'),
+    envioRequerido: (row.envioRequerido ?? row.envio_requerido) ? 1 : 0,
+    costoEnvio: Number(row.costoEnvio ?? row.costo_envio ?? 0),
   })
 
   const serializePayload = (payload: Record<string, string | number>) => ({
@@ -58,6 +60,7 @@ export default function FacturacionModule({ command, rows }: { command: ModuleCo
         { label: 'Total', key: 'total' },
         { label: 'Anticipo', key: 'adelanto' },
         { label: 'Saldo', key: 'saldoRestante' },
+        { label: 'Envío', key: 'costoEnvio' },
         { label: 'Tipo pago', key: 'tipoPago' },
         { label: 'Canal', key: 'canal' },
         { label: 'Fecha entrega', key: 'fechaEntrega' },

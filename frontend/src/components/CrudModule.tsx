@@ -23,10 +23,11 @@ type FormField = {
   key: string
   label: string
   required?: boolean
-  type?: 'text' | 'number' | 'date' | 'select'
+  type?: 'text' | 'number' | 'date' | 'file' | 'barcode' | 'select'
   options?: string[]
   /** Se completa solo (vía deriveForm) — el input queda visible pero no editable. */
   readOnly?: boolean
+  visibleWhen?: (form: Record<string, string>) => boolean
 }
 
 type CrudModuleProps = {
@@ -51,6 +52,13 @@ function sanitizeFormData(form: Record<string, string>, fields: FormField[]) {
     out[field.key] = field.type === 'number' ? Number(value || 0) : value
   }
   return out
+}
+
+function mostrarValor(value: string | number, key: string) {
+  const texto = String(value ?? '')
+  if (!texto || !key.toLowerCase().includes('fecha')) return texto
+  const match = texto.match(/^(\d{4}-\d{2}-\d{2})/)
+  return match?.[1] ?? texto
 }
 
 export default function CrudModule({
@@ -169,7 +177,7 @@ export default function CrudModule({
   }
 
   const saveItem = async () => {
-    const requiredMissing = formFields.find((f) => f.required && !String(form[f.key] ?? '').trim())
+    const requiredMissing = formFields.find((f) => f.visibleWhen?.(form) !== false && f.required && !String(form[f.key] ?? '').trim())
     if (requiredMissing) {
       setMessage(`Falta completar: ${requiredMissing.label}`)
       return
@@ -237,8 +245,8 @@ export default function CrudModule({
   }
 
   return (
-    <div className="erp-card overflow-hidden">
-      <div className="border-b border-[#E4E4E1] bg-[#5C3A35] px-4 py-3 text-white">
+    <div className={`erp-card erp-card--${moduleKey} overflow-hidden`}>
+      <div className="border-b border-[#E4E4E1] bg-[#80613E] px-4 py-3 text-white">
         <h2 className="font-title text-[18px] font-semibold uppercase tracking-[0.03em]">{title}</h2>
         <p className="mt-0.5 text-[12px] text-[#F3E1D6]">{subtitle}</p>
       </div>
@@ -260,7 +268,7 @@ export default function CrudModule({
             <div className="flex items-center gap-2">
               {can(moduleKey, 'exportar') && (
                 <button
-                  className="inline-flex items-center gap-1 rounded-md border border-[#D8D8D4] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#856564] hover:bg-[#FFFFFF]"
+                  className="inline-flex items-center gap-1 rounded-md border border-[#D8D8D4] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#99784F] hover:bg-[#FFFFFF]"
                   onClick={() => setMessage('Export Excel/PDF quedo listo para conectar en backend.')}
                 >
                   <Download size={14} />
@@ -304,14 +312,14 @@ export default function CrudModule({
                   <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-(--row-alt)'}>
                     {tableColumns.map((col) => (
                       <td key={`${row.id}-${col.key}`} className="whitespace-nowrap px-3 py-2 text-[#3B2A21]">
-                        {col.render ? col.render(row[col.key] ?? '', row) : String(row[col.key] ?? '')}
+                        {col.render ? col.render(row[col.key] ?? '', row) : mostrarValor(row[col.key] ?? '', col.key)}
                       </td>
                     ))}
                     <td className={`erp-col-acciones sticky right-0 px-3 py-2 ${idx % 2 === 0 ? 'bg-white' : 'bg-(--row-alt)'}`}>
                       <div className="flex items-center gap-1.5">
                         {can(moduleKey, 'editar') && (
                           <button
-                            className="inline-flex items-center justify-center rounded-md border border-[#D8D8D4] p-1.5 text-[#856564] hover:bg-[#FFFFFF]"
+                            className="inline-flex items-center justify-center rounded-md border border-[#D8D8D4] p-1.5 text-[#99784F] hover:bg-[#FFFFFF]"
                             onClick={() => openEdit(row)}
                             title="Editar"
                           >
@@ -361,7 +369,7 @@ export default function CrudModule({
           <div className="border-b border-[#E4E4E1] pb-4">
             <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-[#3B2A21]">Datos principales</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {formFields.map((field) => (
+              {formFields.filter((field) => field.visibleWhen?.(form) !== false).map((field) => (
                 <div key={field.key}>
                   <label className="mb-1 block min-h-9 text-[13px] font-semibold text-[#3B2A21]">
                     {field.label}
@@ -382,6 +390,37 @@ export default function CrudModule({
                         </option>
                       ))}
                     </select>
+                  ) : field.type === 'barcode' ? (
+                    <input type="text" inputMode="numeric" autoComplete="off" autoFocus className="field border-[#E4E4E1]" value={form[field.key] ?? ''} placeholder="Escanea el código 1D/2D" onChange={(e) => updateField(field.key, e.target.value)} />
+                  ) : field.type === 'file' ? (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="field border-[#E4E4E1]"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const reader = new FileReader()
+                          reader.onload = () => {
+                            const image = new Image()
+                            image.onload = () => {
+                              const maxSize = 1200
+                              const scale = Math.min(1, maxSize / Math.max(image.width, image.height))
+                              const canvas = document.createElement('canvas')
+                              canvas.width = Math.max(1, Math.round(image.width * scale))
+                              canvas.height = Math.max(1, Math.round(image.height * scale))
+                              const context = canvas.getContext('2d')
+                              if (!context) return
+                              context.drawImage(image, 0, 0, canvas.width, canvas.height)
+                              updateField(field.key, canvas.toDataURL('image/jpeg', 0.82))
+                            }
+                            image.src = String(reader.result ?? '')
+                          }
+                          reader.readAsDataURL(file)
+                        }}
+                      />
+                    </>
                   ) : (
                     <input
                       type={field.type ?? 'text'}
@@ -398,7 +437,7 @@ export default function CrudModule({
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
-              className="rounded-md border border-[#D8D8D4] bg-white px-3 py-2 text-[12px] font-semibold text-[#856564] hover:bg-[#FFFFFF]"
+              className="rounded-md border border-[#D8D8D4] bg-white px-3 py-2 text-[12px] font-semibold text-[#99784F] hover:bg-[#FFFFFF]"
               onClick={() => setView('table')}
             >
               Volver a tabla
