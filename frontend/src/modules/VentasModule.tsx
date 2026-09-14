@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ClipboardList, Minus, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 import type { ModuleCommand } from '../types/module'
 
 type Product = {
@@ -38,6 +39,7 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
   const [costoEnvio, setCostoEnvio] = useState(0)
   const [mensaje, setMensaje] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [confirmFinalize, setConfirmFinalize] = useState<Order | null>(null)
   const [screen, setScreen] = useState<'pos' | 'orders'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
   const [productionOrder, setProductionOrder] = useState<Order | null>(null)
@@ -255,13 +257,13 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
   }
 
   const finalizeOrder = async (order: Order) => {
-    if (!window.confirm(`¿Finalizar pedido #${order.id_pedido} y enviarlo a Facturación?`)) return
     const response = await apiFetch(`/api/pedidos/${order.id_pedido}/finalizar`, { method: 'POST' })
     if (!response.ok) {
       setMensaje('No se pudo finalizar el pedido.')
       return
     }
     setMensaje(`Pedido #${order.id_pedido} enviado a Facturación.`)
+    setConfirmFinalize(null)
     await loadOrders()
   }
 
@@ -331,7 +333,7 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
               {orders.map((order) => <Fragment key={order.id_pedido}>
                 <tr>
                   <td>#{order.id_pedido}</td><td>{String(order.fecha_pedido ?? '').slice(0, 10)}</td><td>{order.cliente}</td><td>{order.app || '—'}</td><td>{order.producto}</td><td>{money(Number(order.total ?? 0))}</td><td>{order.estado}</td>
-                  <td className="ventas-order-actions"><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => editOrder(order)} title="Editar pedido" aria-label="Editar pedido"><Pencil size={14} /></button><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => openProduction(order)} title="Agregar producción" aria-label="Agregar producción"><ClipboardList size={14} /></button>{!order.finalizado && <button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => finalizeOrder(order)} title="Finalizar y enviar a Facturación" aria-label="Finalizar y enviar a Facturación"><CheckCircle2 size={14} /></button>}</td>
+                  <td className="ventas-order-actions"><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => editOrder(order)} title="Editar pedido" aria-label="Editar pedido"><Pencil size={14} /></button><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => openProduction(order)} title="Agregar producción" aria-label="Agregar producción"><ClipboardList size={14} /></button>{!order.finalizado && <button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => setConfirmFinalize(order)} title="Finalizar y enviar a Facturación" aria-label="Finalizar y enviar a Facturación"><CheckCircle2 size={14} /></button>}</td>
                 </tr>
                 {productionOrder?.id_pedido === order.id_pedido && <tr className="ventas-production-detail-row"><td colSpan={8}><section className="ventas-production-panel">
                   <div className="ventas-production-heading"><div><strong>Producción del pedido #{order.id_pedido}</strong><span>{order.producto}</span></div><button type="button" className="ventas-production-close" onClick={() => setProductionOrder(null)}>Cerrar producción</button></div>
@@ -357,6 +359,7 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
         </div>
       </div>}
       {mensaje && <p className="ventas-message">{mensaje}</p>}
+      <ConfirmDialog open={confirmFinalize !== null} title="Finalizar pedido" message={`El pedido #${confirmFinalize?.id_pedido ?? ''} pasará a Facturación.`} confirmLabel="Finalizar pedido" onCancel={() => setConfirmFinalize(null)} onConfirm={() => { if (confirmFinalize) finalizeOrder(confirmFinalize) }} />
     </div>
   )
 }

@@ -1,84 +1,114 @@
-import CrudModule from '../components/CrudModule'
-import type { RowRecord } from '../components/CrudModule'
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight, Save, ReceiptText } from 'lucide-react'
+import { apiFetch } from '../utils/api'
 import type { ModuleCommand } from '../types/module'
 
-const DEFAULT_ROWS: RowRecord[] = [
-  { id: 201, controlPedido: 45658, cliente: 'joeni', producto: 'Tulipanes', total: 960, tipoPago: 'Banco', estadoCobro: 'cobrado', canal: '', fechaEntrega: 45696 },
-  { id: 202, controlPedido: 45850, cliente: 'lizzy', producto: 'fundas para audifonos', total: 623.3333333, tipoPago: 'Banco', estadoCobro: 'por cobrar', canal: 'personal', fechaEntrega: 45865 },
-  { id: 203, controlPedido: 45842, cliente: 'Carlos Torres', producto: 'Muneca reversible 14cm', total: 510, tipoPago: 'Banco', estadoCobro: 'cobrado', canal: 'Wapp', fechaEntrega: 45857 },
-]
+type Invoice = Record<string, any>
 
-export default function FacturacionModule({ command, rows }: { command: ModuleCommand; rows?: RowRecord[] }) {
-  const normalizeRow = (row: Record<string, any>): RowRecord => ({
-    id: Number(row.id ?? row.id_pedido ?? row.controlPedido ?? 0),
-    controlPedido: Number(row.controlPedido ?? row.id_pedido ?? row.id ?? 0),
-    cliente: row.cliente ?? '',
-    producto: row.producto ?? '',
-    total: Number(row.total ?? 0),
-    adelanto: Number(row.adelanto ?? 0),
-    saldoRestante: Number(row.saldoRestante ?? row.saldo_restante ?? Math.max(Number(row.total ?? 0) - Number(row.adelanto ?? 0), 0)),
-    tipoPago: row.tipoPago ?? row.tipo_pago ?? 'Banco',
-    canal: row.canal ?? row.app ?? '',
-    fechaEntrega: row.fechaEntrega ?? row.fecha_entrega ?? '',
-    estadoCobro: row.estadoCobro ?? (Number(row.saldoRestante ?? row.saldo_restante ?? 0) <= 0 ? 'cobrado' : 'por cobrar'),
-    envioRequerido: (row.envioRequerido ?? row.envio_requerido) ? 1 : 0,
-    costoEnvio: Number(row.costoEnvio ?? row.costo_envio ?? 0),
-  })
+const money = (value: number) => `L ${value.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const serializePayload = (payload: Record<string, string | number>) => ({
-    id: Number(payload.id ?? 0),
-    controlPedido: Number(payload.controlPedido ?? 0),
-    cliente: payload.cliente,
-    producto: payload.producto,
-    total: Number(payload.total ?? 0),
-    adelanto: Number(payload.adelanto ?? 0),
-    saldoRestante: Number(payload.saldoRestante ?? Math.max(Number(payload.total ?? 0) - Number(payload.adelanto ?? 0), 0)),
-    tipoPago: payload.tipoPago,
-    canal: payload.canal,
-    fecha_entrega: payload.fechaEntrega,
-    estado: payload.estadoCobro === 'cobrado' ? 'entregado' : 'pendiente',
-    app: payload.canal,
-    tipo_pago: payload.tipoPago,
-    fechaEntrega: payload.fechaEntrega,
-  })
+export default function FacturacionModule({ command }: { command: ModuleCommand }) {
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [selected, setSelected] = useState<Invoice | null>(null)
+  const [form, setForm] = useState({ adelanto: '', costoEnvio: '', tipoPago: 'Banco', estadoCobro: 'por cobrar', fechaEntrega: '' })
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  const sourceRows = rows && rows.length > 0 ? rows : DEFAULT_ROWS
+  const loadInvoices = () => {
+    setLoading(true)
+    apiFetch('/api/facturacion')
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('No se pudieron cargar las facturas')))
+      .then((rows) => setInvoices(Array.isArray(rows) ? rows : []))
+      .catch((error) => setMessage(error instanceof Error ? error.message : 'No se pudieron cargar las facturas'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { loadInvoices() }, [command.id])
+
+  const openInvoice = (invoice: Invoice) => {
+    if (selected?.id === invoice.id) {
+      setSelected(null)
+      return
+    }
+    setSelected(invoice)
+    setForm({
+      adelanto: String(invoice.adelanto ?? 0),
+      costoEnvio: String(invoice.costoEnvio ?? 0),
+      tipoPago: String(invoice.tipoPago ?? 'Banco'),
+      estadoCobro: String(invoice.estadoCobro ?? 'por cobrar'),
+      fechaEntrega: String(invoice.fechaEntrega ?? ''),
+    })
+    setMessage('')
+  }
+
+  const saveInvoice = async () => {
+    if (!selected) return
+    const total = Number(selected.total ?? 0) + Number(form.costoEnvio || 0)
+    const adelanto = Number(form.adelanto || 0)
+    const response = await apiFetch(`/api/facturacion/${selected.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cliente: selected.cliente,
+        producto: selected.producto,
+        total,
+        adelanto,
+        saldoRestante: Math.max(total - adelanto, 0),
+        tipoPago: form.tipoPago,
+        estado: form.estadoCobro === 'cobrado' ? 'entregado' : 'pendiente',
+        fechaEntrega: form.fechaEntrega,
+        canal: selected.canal,
+      }),
+    })
+    if (!response.ok) {
+      setMessage('No se pudo guardar la factura.')
+      return
+    }
+    setMessage('Factura actualizada correctamente.')
+    loadInvoices()
+  }
 
   return (
-    <CrudModule
-      moduleKey="facturacion"
-      title="Panel de Facturacion"
-      subtitle="Comprobantes, impuestos y cobros"
-      command={command}
-      apiUrl="/api/facturacion"
-      normalizeRow={normalizeRow}
-      serializePayload={serializePayload}
-      tableColumns={[
-        { label: 'Control pedido', key: 'controlPedido' },
-        { label: 'Cliente', key: 'cliente' },
-        { label: 'Producto', key: 'producto' },
-        { label: 'Total', key: 'total' },
-        { label: 'Anticipo', key: 'adelanto' },
-        { label: 'Saldo', key: 'saldoRestante' },
-        { label: 'Envío', key: 'costoEnvio' },
-        { label: 'Tipo pago', key: 'tipoPago' },
-        { label: 'Canal', key: 'canal' },
-        { label: 'Fecha entrega', key: 'fechaEntrega' },
-        { label: 'Estado cobro', key: 'estadoCobro' },
-      ]}
-      formFields={[
-        { key: 'controlPedido', label: 'Control pedido', type: 'text', required: true },
-        { key: 'cliente', label: 'Cliente', type: 'text', required: true },
-        { key: 'producto', label: 'Producto', type: 'text', required: true },
-        { key: 'total', label: 'Total', type: 'number', required: true },
-        { key: 'adelanto', label: 'Anticipo', type: 'number', required: true },
-        { key: 'saldoRestante', label: 'Saldo restante', type: 'number', required: true },
-        { key: 'tipoPago', label: 'Tipo de pago', type: 'select', options: ['Banco', 'Efectivo'], required: true },
-        { key: 'canal', label: 'Canal app', type: 'select', options: ['Wapp', 'TikTok', 'personal', ''], required: false },
-        { key: 'fechaEntrega', label: 'Fecha entrega', type: 'text', required: true },
-        { key: 'estadoCobro', label: 'Estado cobro', type: 'select', options: ['cobrado', 'por cobrar'], required: true },
-      ]}
-      initialRows={sourceRows}
-    />
+    <div className="erp-card facturacion-panel">
+      <div className="facturacion-heading">
+        <div><h2 className="font-title">Facturación</h2><p>Pedidos finalizados listos para cobrar.</p></div>
+        <ReceiptText size={24} />
+      </div>
+      {message && <p className="facturacion-message">{message}</p>}
+      <div className="facturacion-table-wrap">
+        <table className="facturacion-table">
+          <thead><tr><th></th><th>Pedido</th><th>Cliente</th><th>Producto</th><th>Total</th><th>Anticipo</th><th>Saldo</th><th>Estado</th></tr></thead>
+          <tbody>
+            {invoices.map((invoice) => {
+              const total = Number(invoice.total ?? 0) + Number(invoice.costoEnvio ?? 0)
+              const saldo = Math.max(total - Number(invoice.adelanto ?? 0), 0)
+              const isOpen = selected?.id === invoice.id
+              return <>
+                <tr key={invoice.id} className={isOpen ? 'facturacion-row-open' : ''} onClick={() => openInvoice(invoice)}>
+                  <td>{isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
+                  <td>#{invoice.controlPedido}</td><td>{invoice.cliente}</td><td>{invoice.producto}</td><td>{money(total)}</td><td>{money(Number(invoice.adelanto ?? 0))}</td><td>{money(saldo)}</td><td><span className={`facturacion-status ${saldo <= 0 ? 'is-paid' : ''}`}>{saldo <= 0 ? 'Cobrado' : 'Por cobrar'}</span></td>
+                </tr>
+                {isOpen && <tr key={`${invoice.id}-detail`} className="facturacion-detail-row"><td colSpan={8}><div className="facturacion-detail">
+                  <div className="facturacion-detail-title"><strong>Detalle de factura #{invoice.controlPedido}</strong><span>{invoice.canal || 'Sin canal'}</span></div>
+                  <div className="facturacion-detail-grid">
+                    <label>Cliente<input value={invoice.cliente ?? ''} readOnly /></label>
+                    <label>Producto<input value={invoice.producto ?? ''} readOnly /></label>
+                    <label>Total del pedido<input value={money(Number(invoice.total ?? 0))} readOnly /></label>
+                    <label>Anticipo / depósito<input type="number" value={form.adelanto} onChange={(event) => setForm({ ...form, adelanto: event.target.value })} /></label>
+                    <label>Costo de envío<input type="number" value={form.costoEnvio} onChange={(event) => setForm({ ...form, costoEnvio: event.target.value })} /></label>
+                    <label>Tipo de pago<select value={form.tipoPago} onChange={(event) => setForm({ ...form, tipoPago: event.target.value })}><option>Banco</option><option>Efectivo</option></select></label>
+                    <label>Estado de cobro<select value={form.estadoCobro} onChange={(event) => setForm({ ...form, estadoCobro: event.target.value })}><option value="por cobrar">Por cobrar</option><option value="cobrado">Cobrado</option></select></label>
+                    <label>Fecha de entrega<input type="date" value={form.fechaEntrega.slice(0, 10)} onChange={(event) => setForm({ ...form, fechaEntrega: event.target.value })} /></label>
+                  </div>
+                  <button type="button" className="facturacion-save" onClick={(event) => { event.stopPropagation(); saveInvoice() }}><Save size={15} /> Guardar factura</button>
+                </div></td></tr>}
+              </>
+            })}
+            {!loading && invoices.length === 0 && <tr><td colSpan={8} className="facturacion-empty">No hay pedidos finalizados para facturar.</td></tr>}
+            {loading && <tr><td colSpan={8} className="facturacion-empty">Cargando facturas...</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

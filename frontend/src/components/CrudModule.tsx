@@ -7,6 +7,7 @@ import { ThOrdenable } from './SortIcon'
 import { apiFetch } from '../utils/api'
 import { usePaginacion } from '../utils/usePaginacion'
 import { useTableSort } from '../utils/useTableSort'
+import ConfirmDialog from './ConfirmDialog'
 
 export type RowRecord = {
   id: number
@@ -80,6 +81,7 @@ export default function CrudModule({
   const [search, setSearch] = useState('')
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<RowRecord | null>(null)
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(formFields.map((f) => [f.key, ''])),
   )
@@ -227,8 +229,6 @@ export default function CrudModule({
   }
 
   const deleteItem = async (row: RowRecord) => {
-    if (!window.confirm(`¿Eliminar el registro "${row.id}"? Esta acción no se puede deshacer.`)) return
-
     try {
       if (apiUrl) {
         const response = await apiFetch(`${apiUrl}/${row.id}`, { method: 'DELETE' })
@@ -241,6 +241,8 @@ export default function CrudModule({
       setMessage('Registro eliminado correctamente.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Error al eliminar el registro.')
+    } finally {
+      setConfirmDelete(null)
     }
   }
 
@@ -329,7 +331,7 @@ export default function CrudModule({
                         {can(moduleKey, 'eliminar') && (
                           <button
                             className="inline-flex items-center justify-center rounded-md border border-[#E4B8B4] p-1.5 text-[#9e3f1f] hover:bg-[#fff5ee]"
-                            onClick={() => deleteItem(row)}
+                            onClick={() => setConfirmDelete(row)}
                             title="Eliminar"
                           >
                             <Trash2 size={13} />
@@ -365,20 +367,20 @@ export default function CrudModule({
       )}
 
       {view === 'form' && (
-        <div className="space-y-5 p-4">
-          <div className="border-b border-[#E4E4E1] pb-4">
-            <h3 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-[#3B2A21]">Datos principales</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="crud-form-shell">
+          <div className="crud-form-section">
+            <div className="crud-form-section-heading"><div><span className="crud-form-eyebrow">Ficha de registro</span><h3>Datos principales</h3></div><span className="crud-form-status">{editingId == null ? 'Nuevo registro' : 'Edición'}</span></div>
+            <div className="crud-form-grid">
               {formFields.filter((field) => field.visibleWhen?.(form) !== false).map((field) => (
-                <div key={field.key}>
-                  <label className="mb-1 block min-h-9 text-[13px] font-semibold text-[#3B2A21]">
+                <div key={field.key} className="crud-form-field">
+                  <label>
                     {field.label}
                     {field.required ? ' *' : ''}
                   </label>
 
                   {field.type === 'select' ? (
                     <select
-                      className="field border-[#E4E4E1]"
+                      className="field"
                       value={form[field.key] ?? ''}
                       disabled={field.readOnly}
                       onChange={(e) => updateField(field.key, e.target.value)}
@@ -391,13 +393,13 @@ export default function CrudModule({
                       ))}
                     </select>
                   ) : field.type === 'barcode' ? (
-                    <input type="text" inputMode="numeric" autoComplete="off" autoFocus className="field border-[#E4E4E1]" value={form[field.key] ?? ''} placeholder="Escanea el código 1D/2D" onChange={(e) => updateField(field.key, e.target.value)} />
+                    <input type="text" inputMode="numeric" autoComplete="off" autoFocus className="field" value={form[field.key] ?? ''} placeholder="Escanea el código 1D/2D" onChange={(e) => updateField(field.key, e.target.value)} />
                   ) : field.type === 'file' ? (
                     <>
                       <input
                         type="file"
                         accept="image/*"
-                        className="field border-[#E4E4E1]"
+                        className="field"
                         onChange={(e) => {
                           const file = e.target.files?.[0]
                           if (!file) return
@@ -424,7 +426,7 @@ export default function CrudModule({
                   ) : (
                     <input
                       type={field.type ?? 'text'}
-                      className={`field border-[#E4E4E1]${field.readOnly ? ' cursor-not-allowed bg-[#F3F0EE] text-[#8A7362]' : ''}`}
+                      className={`field${field.readOnly ? ' crud-field-readonly' : ''}`}
                       value={form[field.key] ?? ''}
                       readOnly={field.readOnly}
                       onChange={(e) => updateField(field.key, e.target.value)}
@@ -435,15 +437,15 @@ export default function CrudModule({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="crud-form-actions">
             <button
-              className="rounded-md border border-[#D8D8D4] bg-white px-3 py-2 text-[12px] font-semibold text-[#99784F] hover:bg-[#FFFFFF]"
+              className="crud-btn crud-btn-secondary"
               onClick={() => setView('table')}
             >
-              Volver a tabla
+              Cancelar
             </button>
             <button
-              className="rounded-md bg-(--primary) px-3 py-2 text-[12px] font-semibold text-white hover:bg-(--primary-hover)"
+              className="crud-btn crud-btn-primary"
               onClick={saveItem}
             >
               {apiUrl ? 'Guardar' : 'Guardar (mock)'}
@@ -451,6 +453,15 @@ export default function CrudModule({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title="Eliminar registro"
+        message={`El registro ${confirmDelete?.id ?? ''} se eliminará de forma permanente.`}
+        confirmLabel="Eliminar"
+        danger
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => { if (confirmDelete) deleteItem(confirmDelete) }}
+      />
     </div>
   )
 }
