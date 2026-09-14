@@ -17,6 +17,11 @@ FROM node:20-alpine
 WORKDIR /app
 RUN npm install -g serve@14
 COPY --from=build /app/dist ./dist
+COPY scripts/start.mjs ./scripts/start.mjs
 
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Mismo script que "npm start" (scripts/start.mjs): lee PORT en runtime, no
+# en build time — Railway y la mayoría de PaaS lo asignan por variable de
+# entorno, así que no puede quedar fijo o el proxy no encuentra el
+# contenedor escuchando donde espera.
+CMD ["node", "scripts/start.mjs"]

@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
-    "start": "serve -s dist"
+    "start": "node scripts/start.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
