@@ -152,7 +152,17 @@ router.put('/usuarios/:id', requirePermission('usuarios'), async (req, res, next
       datos.usuario = usuario;
     }
 
-    // La contraseña se cambia por su endpoint dedicado, no por este PUT.
+    // Cambiar la contraseña acá es opcional (además existe el endpoint
+    // dedicado /usuarios/:id/password): si el formulario manda una, se
+    // valida y se guarda — antes se ignoraba en silencio.
+    if (body.password !== undefined && texto(body.password) !== '') {
+      const nuevaPassword = String(body.password);
+      if (nuevaPassword.length < MIN_PASSWORD) {
+        return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres` });
+      }
+      datos.password_hash = hashPassword(nuevaPassword);
+    }
+
     res.json(await conRelaciones(await usuarios.update(actual.id_usuario, datos)));
   } catch (err) { next(err); }
 });

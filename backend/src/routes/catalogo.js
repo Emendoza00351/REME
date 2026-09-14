@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { productos, pedidos, inventario, clientes, gastos, consumosInventario, resolverIdCliente } from '../store/catalogo.js';
+import { withTransaction } from '../store/db.js';
 import { requirePermission } from '../middleware/permisos.js';
 
 const router = Router();
@@ -8,42 +9,58 @@ const texto = (v) => String(v ?? '').trim();
 
 const esCompra = (body = {}) => (body.tipo_movimiento || body.tipoMovimiento) === 'compra_inventario';
 
+function errorConEstado(mensaje, status) {
+  const err = new Error(mensaje);
+  err.status = status;
+  return err;
+}
+
+/**
+ * Lee y actualiza el inventario dentro de una transacción con
+ * `SELECT ... FOR UPDATE`, para que dos compras/consumos concurrentes del
+ * mismo código de barras no lean la misma existencia y dejen el stock
+ * inconsistente (una de las dos debe esperar a que la otra libere la fila).
+ */
 async function ajustarExistencias(datos, delta) {
   const codigoBarras = texto(datos.codigo_barras ?? datos.codigoBarras);
   if (!codigoBarras) throw new Error('La compra para inventario necesita un ID o código de barras');
 
-  let item = await inventario.findBy('codigo_barras', codigoBarras);
-  if (!item && delta < 0) return null;
+  return withTransaction(async (client) => {
+    const { rows } = await client.query('SELECT * FROM inventario WHERE codigo_barras = $1 FOR UPDATE', [codigoBarras]);
+    const item = rows[0] ?? null;
 
-  if (!item) {
-    item = await inventario.insert({
-      codigo_barras: codigoBarras,
-      marca: texto(datos.marca),
-      color: texto(datos.color),
-      codigo_materia_prima: '',
-      codigo_color: texto(datos.codigo_color ?? datos.codigoColor),
-      codigo: texto(datos.codigo_color ?? datos.codigoColor),
-      tamano: texto(datos.tamano),
-      cantidad: Math.max(Number(delta), 0),
-      gr_10: 0,
-      gr_50: 0,
-      gr_100: 0,
-      estado: 'Activo',
-    });
-    return item;
-  }
+    if (!item && delta < 0) return null;
 
-  const cantidad = Number(item.cantidad ?? 0) + Number(delta);
-  if (cantidad < 0) throw new Error('La reversión dejaría el inventario en negativo');
-  return inventario.update(item.id_inventario, {
-    codigo_barras: codigoBarras,
-    marca: texto(datos.marca || item.marca),
-    color: texto(datos.color || item.color),
-    codigo_color: texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo_color),
-    codigo: texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo),
-    tamano: texto(datos.tamano || item.tamano),
-    cantidad,
-    total_gramos: Number(item.tamano ?? datos.tamano ?? 0) * cantidad,
+    if (!item) {
+      const codigoColor = texto(datos.codigo_color ?? datos.codigoColor);
+      const insertado = await client.query(
+        `INSERT INTO inventario
+           (codigo_barras, marca, color, codigo_materia_prima, codigo_color, codigo, tamano, cantidad, gr_10, gr_50, gr_100, estado)
+         VALUES ($1, $2, $3, '', $4, $4, $5, $6, 0, 0, 0, 'Activo')
+         RETURNING *`,
+        [codigoBarras, texto(datos.marca), texto(datos.color), codigoColor, texto(datos.tamano), Math.max(Number(delta), 0)],
+      );
+      return insertado.rows[0];
+    }
+
+    const cantidad = Number(item.cantidad ?? 0) + Number(delta);
+    if (cantidad < 0) throw new Error('La reversión dejaría el inventario en negativo');
+
+    const marca = texto(datos.marca || item.marca);
+    const color = texto(datos.color || item.color);
+    const codigoColor = texto(datos.codigo_color ?? datos.codigoColor ?? item.codigo_color);
+    const tamano = texto(datos.tamano || item.tamano);
+    const totalGramos = Number(item.tamano ?? datos.tamano ?? 0) * cantidad;
+
+    const actualizado = await client.query(
+      `UPDATE inventario
+         SET codigo_barras = $1, marca = $2, color = $3, codigo_color = $4, codigo = $4,
+             tamano = $5, cantidad = $6, total_gramos = $7, actualizado_en = now()
+       WHERE id_inventario = $8
+       RETURNING *`,
+      [codigoBarras, marca, color, codigoColor, tamano, cantidad, totalGramos, item.id_inventario],
+    );
+    return actualizado.rows[0];
   });
 }
 
@@ -286,9 +303,9 @@ router.put('/pedidos/:id', requirePermission('ventas', 'editar'), async (req, re
     const body = req.body || {};
     const datos = { ...body };
     delete datos.id;
-    delete datos.adelanto;
     delete datos.saldoRestante;
     delete datos.saldo_restante;
+    if (body.adelanto !== undefined) datos.adelanto = Number(body.adelanto ?? 0);
 
     if (body.cliente !== undefined) {
       const tipoPago = body.tipo_pago || body.tipoPago || item.tipo_pago || 'Banco';
@@ -297,7 +314,7 @@ router.put('/pedidos/:id', requirePermission('ventas', 'editar'), async (req, re
 
     const updated = await pedidos.update(item.id_pedido, datos);
     const total = Number(updated.total ?? 0);
-    const adelanto = Number(body.adelanto ?? total * 0.5);
+    const adelanto = Number(updated.adelanto ?? 0);
     res.json({
       ...updated,
       adelanto,
@@ -437,22 +454,29 @@ router.put('/facturacion/:id', requirePermission('facturacion', 'editar'), async
       cliente: texto(req.body?.cliente ?? item.cliente),
       producto: texto(req.body?.producto ?? item.producto),
       total: Number(req.body?.total ?? item.total ?? 0),
+      adelanto: Number(req.body?.adelanto ?? item.adelanto ?? 0),
       app: texto(req.body?.canal ?? req.body?.app ?? item.app),
       tipo_pago: req.body?.tipoPago || req.body?.tipo_pago || item.tipo_pago || 'Banco',
       fecha_entrega: req.body?.fecha_entrega || req.body?.fechaEntrega || item.fecha_entrega,
       estado: req.body?.estado || item.estado || 'pendiente',
     });
 
+    const total = Number(updated.total ?? 0);
+    const adelanto = Number(updated.adelanto ?? 0);
+    const saldoRestante = Math.max(total - adelanto, 0);
+
     res.json({
       id: updated.id_pedido,
       controlPedido: updated.id_pedido,
       cliente: updated.cliente,
       producto: updated.producto,
-      total: Number(updated.total ?? 0),
+      total,
+      adelanto,
+      saldoRestante,
       tipoPago: updated.tipo_pago || 'Banco',
       canal: updated.app || '',
       fechaEntrega: updated.fecha_entrega || '',
-      estadoCobro: Number(updated.total ?? 0) > 0 ? 'cobrado' : 'por cobrar',
+      estadoCobro: saldoRestante <= 0 ? 'cobrado' : 'por cobrar',
     });
   } catch (err) { next(err); }
 });
@@ -566,46 +590,77 @@ router.post('/consumos', requirePermission('inventario', 'crear'), async (req, r
       return res.status(400).json({ error: 'Completa el ID, producto y pesos válidos. El peso final no puede superar al inicial.' });
     }
 
-    const material = await inventario.findBy('codigo_barras', codigoBarras);
-    if (!material) return res.status(404).json({ error: 'No existe un material con ese ID' });
-    const tamanoRollo = Number(material.tamano ?? 0);
-    if (tamanoRollo <= 0) return res.status(400).json({ error: 'El material no tiene tamaño en gramos configurado' });
-    const pesoConsumido = pesoInicial - pesoFinal;
-    const rollosConsumidos = pesoConsumido / tamanoRollo;
-    if (rollosConsumidos <= 0) return res.status(400).json({ error: 'El peso consumido debe ser mayor que cero' });
-    const existencia = Number(material.cantidad ?? 0);
-    if (existencia < rollosConsumidos) return res.status(400).json({ error: `Inventario insuficiente. Disponible: ${existencia}` });
+    /* Todo el chequeo de existencia + descuento va en una sola transacción con
+       SELECT ... FOR UPDATE: sin esto, dos consumos concurrentes del mismo
+       material podían leer la misma existencia y ambos pasar la validación,
+       dejando el inventario en negativo. */
+    const resultado = await withTransaction(async (client) => {
+      const { rows } = await client.query('SELECT * FROM inventario WHERE codigo_barras = $1 FOR UPDATE', [codigoBarras]);
+      const material = rows[0];
+      if (!material) throw errorConEstado('No existe un material con ese ID', 404);
 
-    const actualizado = await inventario.update(material.id_inventario, { cantidad: existencia - rollosConsumidos });
-    const consumo = await consumosInventario.insert({
-      fecha: body.fecha || new Date().toISOString().slice(0, 10),
-      id_inventario: actualizado.id_inventario,
-      codigo_barras: codigoBarras,
-      codigo_pedido: Number(body.codigo_pedido ?? body.codigoPedido) || null,
-      producto,
-      color: texto(body.color),
-      peso_inicial: pesoInicial,
-      peso_final: pesoFinal,
-      peso_consumido: pesoConsumido,
-      unidades_producidas: Number(body.unidades_producidas ?? body.unidadesProducidas ?? 0),
-      rollos_consumidos: rollosConsumidos,
-      observacion: texto(body.observacion),
+      const tamanoRollo = Number(material.tamano ?? 0);
+      if (tamanoRollo <= 0) throw errorConEstado('El material no tiene tamaño en gramos configurado', 400);
+
+      const pesoConsumido = pesoInicial - pesoFinal;
+      const rollosConsumidos = pesoConsumido / tamanoRollo;
+      if (rollosConsumidos <= 0) throw errorConEstado('El peso consumido debe ser mayor que cero', 400);
+
+      const existencia = Number(material.cantidad ?? 0);
+      if (existencia < rollosConsumidos) throw errorConEstado(`Inventario insuficiente. Disponible: ${existencia}`, 400);
+
+      const actualizado = await client.query(
+        'UPDATE inventario SET cantidad = $1, actualizado_en = now() WHERE id_inventario = $2 RETURNING *',
+        [existencia - rollosConsumidos, material.id_inventario],
+      );
+
+      const insertado = await client.query(
+        `INSERT INTO consumos_inventario
+           (fecha, id_inventario, codigo_barras, codigo_pedido, producto, color, peso_inicial, peso_final, peso_consumido, unidades_producidas, rollos_consumidos, observacion)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [
+          body.fecha || new Date().toISOString().slice(0, 10),
+          actualizado.rows[0].id_inventario,
+          codigoBarras,
+          Number(body.codigo_pedido ?? body.codigoPedido) || null,
+          producto,
+          texto(body.color),
+          pesoInicial,
+          pesoFinal,
+          pesoConsumido,
+          Number(body.unidades_producidas ?? body.unidadesProducidas ?? 0),
+          rollosConsumidos,
+          texto(body.observacion),
+        ],
+      );
+
+      return { consumo: insertado.rows[0], inventarioRestante: actualizado.rows[0].cantidad };
     });
-    res.status(201).json({ ...consumo, inventario_restante: actualizado.cantidad });
-  } catch (err) { next(err); }
+
+    res.status(201).json({ ...resultado.consumo, inventario_restante: resultado.inventarioRestante });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
 });
 
 router.delete('/consumos/:id', requirePermission('inventario', 'eliminar'), async (req, res, next) => {
   try {
     const consumo = await consumosInventario.find(req.params.id);
     if (!consumo) return res.status(404).json({ error: 'Consumo no encontrado' });
-    const material = await inventario.find(consumo.id_inventario);
-    if (material) {
-      await inventario.update(material.id_inventario, {
-        cantidad: Number(material.cantidad ?? 0) + Number(consumo.rollos_consumidos ?? 0),
-      });
-    }
-    await consumosInventario.remove(consumo.id_consumo);
+
+    await withTransaction(async (client) => {
+      if (consumo.id_inventario) {
+        await client.query('SELECT * FROM inventario WHERE id_inventario = $1 FOR UPDATE', [consumo.id_inventario]);
+        await client.query(
+          'UPDATE inventario SET cantidad = cantidad + $1, actualizado_en = now() WHERE id_inventario = $2',
+          [Number(consumo.rollos_consumidos ?? 0), consumo.id_inventario],
+        );
+      }
+      await client.query('DELETE FROM consumos_inventario WHERE id_consumo = $1', [consumo.id_consumo]);
+    });
+
     res.json({ message: 'Consumo eliminado e inventario restaurado' });
   } catch (err) { next(err); }
 });

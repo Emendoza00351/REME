@@ -13,6 +13,7 @@ export type Sesion = {
   rol: string | null
   empleado: string | null
   permisos: Permisos
+  token: string
 }
 
 export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }) {
@@ -140,10 +141,12 @@ export default function Login({ onLogin }: { onLogin: (sesion: Sesion) => void }
           </button>
         </form>
 
-        <p className="login-demo">
-          <strong>Usuario de prueba</strong> mientras no hay altas reales:
-          {' '}usuario <code>demo</code> · contraseña <code>reme2026</code>
-        </p>
+        {import.meta.env.DEV && (
+          <p className="login-demo">
+            <strong>Usuario de prueba</strong> mientras no hay altas reales:
+            {' '}usuario <code>demo</code> · contraseña <code>reme2026</code>
+          </p>
+        )}
       </div>
     </div>
   )

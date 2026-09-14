@@ -8,16 +8,26 @@ import { leerSesion } from './session'
  */
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+/** Se dispara cuando el backend rechaza el token (expirado o inválido), para
+ * que App.tsx cierre la sesión y vuelva a la pantalla de login. */
+export const SESION_EXPIRADA_EVENT = 'erp-sesion-expirada'
+
 /**
- * fetch() que identifica al usuario logueado ante el backend (headers
- * x-usuario-id / x-rol-id). Sin esto el backend no sabe quién hace cada
- * petición y la bitácora quedaría con "Desconocido" en todo.
+ * fetch() que identifica al usuario logueado ante el backend con el token
+ * firmado que devuelve /api/login (Authorization: Bearer <token>). Antes se
+ * mandaban x-usuario-id/x-rol-id sin firmar — cualquiera podía editarlos en
+ * el navegador y hacerse pasar por otro usuario o rol.
  */
 export function apiFetch(input: string, init: RequestInit = {}) {
   const sesion = leerSesion()
   const headers = new Headers(init.headers)
-  if (sesion?.id_usuario) headers.set('x-usuario-id', String(sesion.id_usuario))
-  if (sesion?.id_rol) headers.set('x-rol-id', String(sesion.id_rol))
+  if (sesion?.token) headers.set('Authorization', `Bearer ${sesion.token}`)
   const url = input.startsWith('/') ? `${API_BASE}${input}` : input
-  return fetch(url, { ...init, headers })
+
+  return fetch(url, { ...init, headers }).then((res) => {
+    if (res.status === 401 && sesion) {
+      window.dispatchEvent(new CustomEvent(SESION_EXPIRADA_EVENT))
+    }
+    return res
+  })
 }

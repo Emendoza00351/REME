@@ -42,7 +42,7 @@ import VentasModule from './modules/VentasModule'
 import ResumenGeneral from './components/ResumenGeneral'
 import Login from './components/Login'
 import type { Sesion } from './components/Login'
-import { apiFetch } from './utils/api'
+import { apiFetch, SESION_EXPIRADA_EVENT } from './utils/api'
 import { SESION_KEY, leerSesion } from './utils/session'
 import type { ModuleAction, ModuleCommand, ModuleKey } from './types/module'
 
@@ -80,6 +80,27 @@ const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
 
 type MenuChild = { id: ModuleKey; label: string; Icon: LucideIcon }
 type MenuItem = { id: string; label: string; Icon: LucideIcon; children: MenuChild[] }
+
+/* El backend no tiene un módulo de permisos por cada pestaña: "catalogo" lee
+   /api/catalogo, que exige el permiso "productos", y "consumos" lee
+   /api/consumos, que exige "inventario" (mismo permiso que usa ConsumosModule
+   al armar su CrudModule). Este mapa traduce la pestaña al módulo de permisos
+   real para poder filtrar el menú correctamente. */
+const PERMISO_DEL_MODULO: Record<ModuleKey, string> = {
+  gastos: 'gastos',
+  ventas: 'ventas',
+  facturacion: 'facturacion',
+  clientes: 'clientes',
+  productos: 'productos',
+  catalogo: 'productos',
+  inventario: 'inventario',
+  consumos: 'inventario',
+  resultados: 'resultados',
+  empleados: 'empleados',
+  usuarios: 'usuarios',
+  roles: 'roles',
+  auditoria: 'auditoria',
+}
 
 /* Agrupado siguiendo el origen real de los datos en "REME 2025.xlsx":
    Ventas ← VENTAS · Gastos ← EGRESOS · Productos ← PRODUCTOS ·
@@ -223,6 +244,15 @@ function App() {
     return () => window.removeEventListener('erp-open-tab', onOpenTab)
   }, [])
 
+  useEffect(() => {
+    const onSesionExpirada = () => {
+      localStorage.removeItem(SESION_KEY)
+      setSesion(null)
+    }
+    window.addEventListener(SESION_EXPIRADA_EVENT, onSesionExpirada)
+    return () => window.removeEventListener(SESION_EXPIRADA_EVENT, onSesionExpirada)
+  }, [])
+
   const tabContent = useMemo(
     () => ({
       gastos: <GastosModule command={commands.gastos} />,
@@ -275,6 +305,13 @@ function App() {
 
           <nav className="erp-nav">
             {MENU_ITEMS.map((item) => {
+              // El backend ya rechaza estas rutas sin permiso de "ver", pero
+              // mostrarlas igual en el menú invita a abrir un módulo vacío;
+              // se ocultan acá para que el menú refleje lo que el usuario
+              // realmente puede ver.
+              const children = item.children.filter((child) => sesion.permisos[PERMISO_DEL_MODULO[child.id]]?.ver)
+              if (children.length === 0) return null
+
               const isOpen = openGroups.includes(item.id)
               return (
                 <div key={item.id} className="erp-nav-group">
@@ -300,7 +337,7 @@ function App() {
 
                   {expanded && isOpen && (
                     <div className="erp-nav-children">
-                      {item.children.map((child) => (
+                      {children.map((child) => (
                         <button
                           key={child.id}
                           onClick={() => navigate(child.id)}

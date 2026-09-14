@@ -92,7 +92,7 @@ export default function UsuariosModule({ command }: { command: ModuleCommand }) 
         { key: 'usuario', label: 'Usuario (automático, DNI del empleado)', type: 'text', required: true, readOnly: true },
         { key: 'correo', label: 'Correo (automático)', type: 'text', required: true, readOnly: true },
         { key: 'telefono', label: 'Teléfono (automático)', type: 'text', required: false, readOnly: true },
-        { key: 'password', label: 'Contraseña (mín. 8 caracteres)', type: 'text', required: false },
+        { key: 'password', label: 'Contraseña (mín. 8 caracteres)', type: 'password', required: false },
         { key: 'rol', label: 'Rol', type: 'select', options: roles.map((r) => r.nombre), required: true },
         { key: 'estado', label: 'Estado', type: 'select', options: ['Activo', 'Inactivo'], required: true },
       ]}

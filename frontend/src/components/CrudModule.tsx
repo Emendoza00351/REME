@@ -24,7 +24,7 @@ type FormField = {
   key: string
   label: string
   required?: boolean
-  type?: 'text' | 'number' | 'date' | 'file' | 'barcode' | 'select'
+  type?: 'text' | 'number' | 'date' | 'file' | 'barcode' | 'select' | 'password'
   options?: string[]
   /** Se completa solo (vía deriveForm) — el input queda visible pero no editable. */
   readOnly?: boolean
@@ -82,6 +82,8 @@ export default function CrudModule({
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<RowRecord | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [form, setForm] = useState<Record<string, string>>(() =>
     Object.fromEntries(formFields.map((f) => [f.key, ''])),
   )
@@ -90,20 +92,37 @@ export default function CrudModule({
     setItems(initialRows)
   }, [initialRows])
 
+  // normalizeRow/serializePayload se declaran inline en cada módulo (nueva
+  // identidad en cada render); guardarlos en refs evita que el efecto de
+  // abajo dependa de ellos y vuelva a pedir la tabla en cada re-render del
+  // módulo padre.
+  const normalizeRowRef = useRef(normalizeRow)
+  normalizeRowRef.current = normalizeRow
+
   useEffect(() => {
     if (!apiUrl) return
+    const controller = new AbortController()
 
-    apiFetch(apiUrl)
+    apiFetch(apiUrl, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('No se pudo cargar la tabla')
         return res.json()
       })
       .then((rows) => {
-        const mapped = Array.isArray(rows) ? rows.map((row) => normalizeRow ? normalizeRow(row) : ({ id: Number(row.id ?? 0), ...row })) : []
+        const normalize = normalizeRowRef.current
+        const mapped = Array.isArray(rows) ? rows.map((row) => normalize ? normalize(row) : ({ id: Number(row.id ?? 0), ...row })) : []
         setItems(mapped)
       })
-      .catch(() => setItems(initialRows))
-  }, [apiUrl, initialRows, normalizeRow])
+      .catch((error) => {
+        if (controller.signal.aborted) return
+        setItems(initialRows)
+        setMessage('No se pudo conectar con el servidor. Mostrando datos de ejemplo, no reales.')
+        void error
+      })
+
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl])
 
   const ultimoCommandId = useRef(command.id)
 
@@ -133,17 +152,20 @@ export default function CrudModule({
     return items.filter((item) => Object.values(item).some((v) => String(v).toLowerCase().includes(q)))
   }, [items, search])
 
+  // Ordenar tiene que pasar antes que paginar: si no, un clic en el
+  // encabezado solo reordena las filas de la página actual en vez de las
+  // `filtered.length` filas filtradas completas.
+  const { ordenadas: sorted, columna, direccion, ordenarPor } = useTableSort(filtered)
+
   const {
     pageLimit,
     setPageLimit,
     paginaActual,
     totalPaginas,
-    pageItems,
+    pageItems: ordenadas,
     irAnterior,
     irSiguiente,
-  } = usePaginacion(filtered)
-
-  const { ordenadas, columna, direccion, ordenarPor } = useTableSort(pageItems)
+  } = usePaginacion(sorted)
 
   const updateField = (key: string, value: string) => {
     setForm((prev) => {
@@ -178,16 +200,38 @@ export default function CrudModule({
     setView('form')
   }
 
+  async function mensajeDeError(response: Response, fallback: string) {
+    try {
+      const data = await response.json()
+      return (data && typeof data === 'object' && 'error' in data && data.error) ? String(data.error) : fallback
+    } catch {
+      return fallback
+    }
+  }
+
   const saveItem = async () => {
+    if (saving) return
+
     const requiredMissing = formFields.find((f) => f.visibleWhen?.(form) !== false && f.required && !String(form[f.key] ?? '').trim())
     if (requiredMissing) {
       setMessage(`Falta completar: ${requiredMissing.label}`)
       return
     }
 
+    const invalidNumber = formFields.find((f) => {
+      if (f.type !== 'number' || f.visibleWhen?.(form) === false) return false
+      const raw = String(form[f.key] ?? '').trim()
+      return raw !== '' && !Number.isFinite(Number(raw))
+    })
+    if (invalidNumber) {
+      setMessage(`${invalidNumber.label} debe ser un número válido`)
+      return
+    }
+
     const payload = sanitizeFormData(form, formFields)
     const body = serializePayload ? serializePayload(payload) : payload
 
+    setSaving(true)
     try {
       if (apiUrl) {
         const url = editingId == null ? apiUrl : `${apiUrl}/${editingId}`
@@ -199,8 +243,7 @@ export default function CrudModule({
         })
 
         if (!response.ok) {
-          const errText = await response.text()
-          throw new Error(errText || 'Error al guardar')
+          throw new Error(await mensajeDeError(response, 'Error al guardar'))
         }
 
         const saved = await response.json()
@@ -225,16 +268,19 @@ export default function CrudModule({
       setView('table')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Error al guardar el registro.')
+    } finally {
+      setSaving(false)
     }
   }
 
   const deleteItem = async (row: RowRecord) => {
+    if (deletingId != null) return
+    setDeletingId(row.id)
     try {
       if (apiUrl) {
         const response = await apiFetch(`${apiUrl}/${row.id}`, { method: 'DELETE' })
         if (!response.ok) {
-          const errText = await response.text()
-          throw new Error(errText || 'Error al eliminar')
+          throw new Error(await mensajeDeError(response, 'Error al eliminar'))
         }
       }
       setItems((prev) => prev.filter((item) => item.id !== row.id))
@@ -243,7 +289,19 @@ export default function CrudModule({
       setMessage(error instanceof Error ? error.message : 'Error al eliminar el registro.')
     } finally {
       setConfirmDelete(null)
+      setDeletingId(null)
     }
+  }
+
+  if (!can(moduleKey, 'ver')) {
+    return (
+      <div className={`erp-card erp-card--${moduleKey} overflow-hidden`}>
+        <div className="border-b border-[#E4E4E1] bg-[#80613E] px-4 py-3 text-white">
+          <h2 className="font-title text-[18px] font-semibold uppercase tracking-[0.03em]">{title}</h2>
+        </div>
+        <p className="px-4 py-6 text-[12px] text-[#8A7362]">No tenés permiso para ver este módulo.</p>
+      </div>
+    )
   }
 
   return (
@@ -330,7 +388,8 @@ export default function CrudModule({
                         )}
                         {can(moduleKey, 'eliminar') && (
                           <button
-                            className="inline-flex items-center justify-center rounded-md border border-[#E4B8B4] p-1.5 text-[#9e3f1f] hover:bg-[#fff5ee]"
+                            className="inline-flex items-center justify-center rounded-md border border-[#E4B8B4] p-1.5 text-[#9e3f1f] hover:bg-[#fff5ee] disabled:opacity-50"
+                            disabled={deletingId != null}
                             onClick={() => setConfirmDelete(row)}
                             title="Eliminar"
                           >
@@ -440,15 +499,17 @@ export default function CrudModule({
           <div className="crud-form-actions">
             <button
               className="crud-btn crud-btn-secondary"
+              disabled={saving}
               onClick={() => setView('table')}
             >
               Cancelar
             </button>
             <button
               className="crud-btn crud-btn-primary"
+              disabled={saving}
               onClick={saveItem}
             >
-              {apiUrl ? 'Guardar' : 'Guardar (mock)'}
+              {saving ? 'Guardando…' : (apiUrl ? 'Guardar' : 'Guardar (mock)')}
             </button>
           </div>
         </div>

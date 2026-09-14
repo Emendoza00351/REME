@@ -1,8 +1,15 @@
 import { Router } from 'express';
 import { empleados, roles, usuarios } from '../store/seed.js';
 import { getPermisosRol, resolverRol, resolverUsuario } from '../middleware/permisos.js';
-import { verifyPassword } from '../utils/password.js';
+import { hashPassword, verifyPassword } from '../utils/password.js';
+import { signToken } from '../utils/token.js';
 import { registrarEvento } from '../store/auditoria.js';
+
+/* Hash válido de una contraseña que nadie tiene: se compara contra esto
+   cuando el usuario no existe, para que verifyPassword() siempre haga el
+   mismo trabajo de scrypt y la respuesta de /login no tarde distinto según
+   si el usuario existe o no (evita enumerar usuarios por timing). */
+const HASH_DUMMY = hashPassword('usuario-inexistente');
 
 const router = Router();
 
@@ -28,6 +35,7 @@ async function conSesion(u) {
     rol: rol?.nombre ?? null,
     empleado: emp?.nombre ?? null,
     permisos: permisosComoRecord(u.id_rol),
+    token: signToken({ id_usuario: u.id_usuario, id_rol: u.id_rol }),
   };
 }
 
@@ -42,7 +50,8 @@ router.post('/login', async (req, res, next) => {
     }
 
     const u = await usuarios.findBy('usuario', usuario);
-    if (!u || !verifyPassword(password, u.password_hash)) {
+    const passwordValida = verifyPassword(password, u?.password_hash ?? HASH_DUMMY);
+    if (!u || !passwordValida) {
       await registrarEvento({
         idUsuario: u?.id_usuario ?? null, idRol: u?.id_rol ?? null,
         modulo: 'auth', accion: 'login_fallido', registroId: null,

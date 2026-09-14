@@ -86,4 +86,26 @@ function createTable(tabla, pkField) {
   };
 }
 
+/**
+ * Corre `fn(client)` dentro de BEGIN/COMMIT sobre la misma conexión, para
+ * que un SELECT ... FOR UPDATE dentro de `fn` realmente bloquee la fila
+ * hasta el commit. Necesario para ajustes de inventario: dos requests
+ * concurrentes leyendo con pool.query() (conexiones distintas) podían pasar
+ * ambas la validación de existencia y dejar el stock en negativo.
+ */
+export async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const resultado = await fn(client);
+    await client.query('COMMIT');
+    return resultado;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export { createTable };

@@ -69,7 +69,10 @@ app.use((err, _req, res, _next) => {
     return res.status(400).json({ error: 'JSON inválido en el cuerpo de la petición' });
   }
   console.error('[error]', err);
-  res.status(500).json({ error: err?.message || 'Error interno del servidor' });
+  const mensaje = process.env.NODE_ENV === 'production'
+    ? 'Error interno del servidor'
+    : (err?.message || 'Error interno del servidor');
+  res.status(500).json({ error: mensaje });
 });
 
 async function arrancar() {

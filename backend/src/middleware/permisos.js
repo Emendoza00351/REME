@@ -6,11 +6,14 @@
  * cachea en memoria (`matriz`) al arrancar y se actualiza en cada escritura
  * (setPermisosRol/borrarPermisosRol ya escriben en ambos lados).
  *
- * Todavía no hay login basado en sesión: el actor se resuelve de los headers
- * `x-rol-id` / `x-usuario-id` que manda el frontend tras el login.
+ * El actor se resuelve del JWT firmado que manda el frontend en
+ * "Authorization: Bearer <token>" (emitido por POST /api/login). Antes se
+ * confiaba en los headers x-rol-id/x-usuario-id, que el cliente podía poner
+ * a cualquier valor — con eso bastaba para hacerse pasar por ADMIN.
  */
 import { pool } from '../store/db.js';
 import { registrarEvento } from '../store/auditoria.js';
+import { verifyToken } from '../utils/token.js';
 
 export const MODULOS = [
   'ventas', 'gastos', 'clientes', 'facturacion',
@@ -113,19 +116,21 @@ function accionPorDefecto(method) {
   return 'editar'; // PUT / PATCH
 }
 
-export function resolverRol(req) {
-  const raw = req.get('x-rol-id');
-  const id = Number(raw);
-  return Number.isFinite(id) && id > 0 ? id : ROL_ADMIN;
+function actorDesdeToken(req) {
+  const header = req.get('authorization') || '';
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  if (!match) return null;
+  return verifyToken(match[1]);
 }
 
-/* Igual que resolverRol, pero sin caer a un valor por defecto: si el
-   frontend no manda quién es, la bitácora debe quedar con "Desconocido"
-   en vez de inventarse un usuario. */
+/* Sin token válido no hay rol: quien llame requirePermission() debe tratar
+   `null` como "no autenticado" (401), nunca como ADMIN por defecto. */
+export function resolverRol(req) {
+  return actorDesdeToken(req)?.id_rol ?? null;
+}
+
 export function resolverUsuario(req) {
-  const raw = req.get('x-usuario-id');
-  const id = Number(raw);
-  return Number.isFinite(id) && id > 0 ? id : null;
+  return actorDesdeToken(req)?.id_usuario ?? null;
 }
 
 const ACCIONES_AUDITABLES = ['crear', 'editar', 'eliminar'];
@@ -141,6 +146,9 @@ function extraerIdRegistro(paramId, body) {
 export function requirePermission(modulo, accion) {
   return (req, res, next) => {
     const idRol = resolverRol(req);
+    if (idRol == null) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
     const idUsuario = resolverUsuario(req);
     req.idRol = idRol;
     req.idUsuario = idUsuario;

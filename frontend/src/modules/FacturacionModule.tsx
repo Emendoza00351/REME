@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Save, ReceiptText } from 'lucide-react'
 import { apiFetch } from '../utils/api'
 import type { ModuleCommand } from '../types/module'
@@ -13,6 +13,7 @@ export default function FacturacionModule({ command }: { command: ModuleCommand 
   const [form, setForm] = useState({ adelanto: '', costoEnvio: '', tipoPago: 'Banco', estadoCobro: 'por cobrar', fechaEntrega: '' })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   const loadInvoices = () => {
     setLoading(true)
@@ -42,30 +43,35 @@ export default function FacturacionModule({ command }: { command: ModuleCommand 
   }
 
   const saveInvoice = async () => {
-    if (!selected) return
-    const total = Number(selected.total ?? 0) + Number(form.costoEnvio || 0)
-    const adelanto = Number(form.adelanto || 0)
-    const response = await apiFetch(`/api/facturacion/${selected.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cliente: selected.cliente,
-        producto: selected.producto,
-        total,
-        adelanto,
-        saldoRestante: Math.max(total - adelanto, 0),
-        tipoPago: form.tipoPago,
-        estado: form.estadoCobro === 'cobrado' ? 'entregado' : 'pendiente',
-        fechaEntrega: form.fechaEntrega,
-        canal: selected.canal,
-      }),
-    })
-    if (!response.ok) {
-      setMessage('No se pudo guardar la factura.')
-      return
+    if (!selected || saving) return
+    setSaving(true)
+    try {
+      const total = Number(selected.total ?? 0) + Number(form.costoEnvio || 0)
+      const adelanto = Number(form.adelanto || 0)
+      const response = await apiFetch(`/api/facturacion/${selected.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente: selected.cliente,
+          producto: selected.producto,
+          total,
+          adelanto,
+          saldoRestante: Math.max(total - adelanto, 0),
+          tipoPago: form.tipoPago,
+          estado: form.estadoCobro === 'cobrado' ? 'entregado' : 'pendiente',
+          fechaEntrega: form.fechaEntrega,
+          canal: selected.canal,
+        }),
+      })
+      if (!response.ok) {
+        setMessage('No se pudo guardar la factura.')
+        return
+      }
+      setMessage('Factura actualizada correctamente.')
+      loadInvoices()
+    } finally {
+      setSaving(false)
     }
-    setMessage('Factura actualizada correctamente.')
-    loadInvoices()
   }
 
   return (
@@ -83,8 +89,8 @@ export default function FacturacionModule({ command }: { command: ModuleCommand 
               const total = Number(invoice.total ?? 0) + Number(invoice.costoEnvio ?? 0)
               const saldo = Math.max(total - Number(invoice.adelanto ?? 0), 0)
               const isOpen = selected?.id === invoice.id
-              return <>
-                <tr key={invoice.id} className={isOpen ? 'facturacion-row-open' : ''} onClick={() => openInvoice(invoice)}>
+              return <Fragment key={invoice.id}>
+                <tr className={isOpen ? 'facturacion-row-open' : ''} onClick={() => openInvoice(invoice)}>
                   <td>{isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
                   <td>#{invoice.controlPedido}</td><td>{invoice.cliente}</td><td>{invoice.producto}</td><td>{money(total)}</td><td>{money(Number(invoice.adelanto ?? 0))}</td><td>{money(saldo)}</td><td><span className={`facturacion-status ${saldo <= 0 ? 'is-paid' : ''}`}>{saldo <= 0 ? 'Cobrado' : 'Por cobrar'}</span></td>
                 </tr>
@@ -100,9 +106,9 @@ export default function FacturacionModule({ command }: { command: ModuleCommand 
                     <label>Estado de cobro<select value={form.estadoCobro} onChange={(event) => setForm({ ...form, estadoCobro: event.target.value })}><option value="por cobrar">Por cobrar</option><option value="cobrado">Cobrado</option></select></label>
                     <label>Fecha de entrega<input type="date" value={form.fechaEntrega.slice(0, 10)} onChange={(event) => setForm({ ...form, fechaEntrega: event.target.value })} /></label>
                   </div>
-                  <button type="button" className="facturacion-save" onClick={(event) => { event.stopPropagation(); saveInvoice() }}><Save size={15} /> Guardar factura</button>
+                  <button type="button" className="facturacion-save" disabled={saving} onClick={(event) => { event.stopPropagation(); saveInvoice() }}><Save size={15} /> {saving ? 'Guardando…' : 'Guardar factura'}</button>
                 </div></td></tr>}
-              </>
+              </Fragment>
             })}
             {!loading && invoices.length === 0 && <tr><td colSpan={8} className="facturacion-empty">No hay pedidos finalizados para facturar.</td></tr>}
             {loading && <tr><td colSpan={8} className="facturacion-empty">Cargando facturas...</td></tr>}
