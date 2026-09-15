@@ -121,7 +121,14 @@ body {
   gap: 8px;
   cursor: pointer;
 }
-.erp-sidebar:not(.erp-sidebar--expanded) .erp-sidebar-header { justify-content: center; }
+.erp-sidebar:not(.erp-sidebar--expanded) .erp-sidebar-header {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: auto;
+  min-height: 60px;
+  padding: 8px 6px;
+}
 .erp-sidebar:not(.erp-sidebar--expanded) .erp-logo-row { flex: 0 0 auto; justify-content: center; }
 .erp-logo-icon {
   height: 36px;
@@ -170,9 +177,7 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 .erp-sidebar:not(.erp-sidebar--expanded) .erp-pin-btn {
-  position: absolute;
-  top: 5px;
-  right: 3px;
+  position: static;
   width: 22px;
   height: 22px;
   padding: 3px;
@@ -377,30 +382,6 @@ body {
 }
 .erp-topbar-greeting        { font-size: 14px; color: #7A6656; white-space: nowrap; }
 .erp-topbar-greeting strong { color: #3B2A21; font-family: 'Sora', sans-serif; }
-.erp-topbar-right           { display: flex; align-items: center; gap: 14px; }
-.erp-topbar-group           { display: flex; align-items: center; gap: 10px; }
-
-.erp-topbar-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #fff;
-  border: 1px solid #E4E4E1;
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: #927D6C;
-}
-.erp-topbar-search input {
-  width: 170px;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #3B2A21;
-  font-family: inherit;
-  font-size: 13px;
-}
-.erp-topbar-search input::placeholder { color: #B3A093; }
-
 .erp-avatar {
   width: 36px;
   height: 36px;

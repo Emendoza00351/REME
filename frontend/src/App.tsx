@@ -16,7 +16,6 @@ import {
   Minimize2,
   PackageSearch,
   Receipt,
-  Search,
   ShieldCheck,
   ShoppingBag,
   Building2,
@@ -379,14 +378,6 @@ function App() {
             <header className="erp-topbar">
               <div className="erp-topbar-greeting">
                 Hola! <strong>{sesion.nombre.split(' ')[0]}</strong>
-              </div>
-              <div className="erp-topbar-right">
-                <div className="erp-topbar-group">
-                  <div className="erp-topbar-search">
-                    <Search size={14} />
-                    <input placeholder="Buscar módulo o acción" />
-                  </div>
-                </div>
               </div>
             </header>
 
