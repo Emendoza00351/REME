@@ -4,6 +4,7 @@ frontend/node_modules/
 backend/.env
 frontend/.env
 .env
+railway.env
 .DS_Store
 **/.DS_Store
 dist/
