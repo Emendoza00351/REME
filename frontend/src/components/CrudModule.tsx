@@ -79,6 +79,9 @@ export default function CrudModule({
   const [items, setItems] = useState<RowRecord[]>(initialRows)
   const [view, setView] = useState<'table' | 'form'>('table')
   const [search, setSearch] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('')
   const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<RowRecord | null>(null)
@@ -146,11 +149,45 @@ export default function CrudModule({
     }
   }, [can, command, formFields, moduleKey])
 
+  // Se detectan solos a partir de formFields: la tabla solo muestra el filtro
+  // de fecha o de estado cuando ese módulo realmente tiene ese campo (p. ej.
+  // Productos no tiene ninguno de los dos, Gastos tiene ambos).
+  const dateField = useMemo(() => formFields.find((f) => f.type === 'date'), [formFields])
+  const estadoField = useMemo(
+    () => formFields.find((f) => f.type === 'select' && f.key.toLowerCase().includes('estado')),
+    [formFields],
+  )
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return items
-    const q = search.trim().toLowerCase()
-    return items.filter((item) => Object.values(item).some((v) => String(v).toLowerCase().includes(q)))
-  }, [items, search])
+    let rows = items
+
+    if (dateField && (fechaDesde || fechaHasta)) {
+      rows = rows.filter((item) => {
+        const fecha = String(item[dateField.key] ?? '').slice(0, 10)
+        if (!fecha) return false
+        if (fechaDesde && fecha < fechaDesde) return false
+        if (fechaHasta && fecha > fechaHasta) return false
+        return true
+      })
+    }
+
+    if (estadoField && estadoFiltro) {
+      rows = rows.filter((item) => String(item[estadoField.key] ?? '') === estadoFiltro)
+    }
+
+    // Cada palabra buscada puede estar en una columna distinta (p. ej. "juan
+    // activo" encuentra la fila con nombre "Juan" en una columna y estado
+    // "Activo" en otra) — no hace falta que las palabras vengan juntas.
+    const palabras = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (palabras.length > 0) {
+      rows = rows.filter((item) => {
+        const valores = Object.values(item).map((v) => String(v).toLowerCase())
+        return palabras.every((palabra) => valores.some((valor) => valor.includes(palabra)))
+      })
+    }
+
+    return rows
+  }, [items, search, fechaDesde, fechaHasta, estadoFiltro, dateField, estadoField])
 
   // Ordenar tiene que pasar antes que paginar: si no, un clic en el
   // encabezado solo reordena las filas de la página actual en vez de las
@@ -323,6 +360,40 @@ export default function CrudModule({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {dateField && (
+                <span className="crud-filtro-fecha">
+                  <input
+                    className="field"
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    aria-label="Desde"
+                    title="Desde"
+                  />
+                  <span>a</span>
+                  <input
+                    className="field"
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    aria-label="Hasta"
+                    title="Hasta"
+                  />
+                </span>
+              )}
+              {estadoField && (
+                <select
+                  className="field w-auto!"
+                  value={estadoFiltro}
+                  onChange={(e) => setEstadoFiltro(e.target.value)}
+                  aria-label={estadoField.label}
+                >
+                  <option value="">{estadoField.label}: todos</option>
+                  {(estadoField.options ?? []).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

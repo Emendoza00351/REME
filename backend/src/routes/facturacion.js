@@ -10,8 +10,12 @@ router.get('/facturacion', requirePermission('facturacion'), async (_req, res, n
     const lista = (await pedidos.list({ orderBy: 'id_pedido' })).filter((pedido) => pedido.finalizado);
     const facturas = lista.map((pedido) => {
       const total = Number(pedido.total ?? 0);
-      const adelanto = total * 0.5;
-      const saldoRestante = Math.max(total - adelanto, 0);
+      const costoEnvio = Number(pedido.costo_envio ?? 0);
+      // Si nunca se guardó un anticipo propio (pedido recién finalizado), se
+      // asume el 50% de siempre; si ya se editó desde Facturación, se respeta
+      // ese valor en vez de pisarlo con el 50% en cada carga.
+      const adelanto = Number(pedido.adelanto ?? total * 0.5);
+      const saldoRestante = Math.max((total + costoEnvio) - adelanto, 0);
 
       return {
         id: pedido.id_pedido,
@@ -22,7 +26,9 @@ router.get('/facturacion', requirePermission('facturacion'), async (_req, res, n
         adelanto,
         saldoRestante,
         envioRequerido: !!pedido.envio_requerido,
-        costoEnvio: Number(pedido.costo_envio ?? 0),
+        costoEnvio,
+        facturado: !!pedido.facturado,
+        facturadoEn: pedido.facturado_en || null,
         estadoPedido: pedido.finalizado ? 'finalizado' : 'pendiente',
         tipoPago: pedido.tipo_pago || 'Banco',
         canal: pedido.app || '',
@@ -87,20 +93,32 @@ router.put('/facturacion/:id', requirePermission('facturacion', 'editar'), async
     const item = await pedidos.find(req.params.id);
     if (!item) return res.status(404).json({ error: 'Pedido no encontrado' });
 
+    // El envío se decide acá (al facturar), no al armar el pedido — por eso
+    // esta ruta es la única que escribe envio_requerido/costo_envio. El
+    // total del pedido (precio de los productos) no se toca desde acá.
+    const envioRequerido = !!req.body?.envioRequerido;
+    const costoEnvio = envioRequerido ? Number(req.body?.costoEnvio ?? 0) : 0;
+
+    // Guardar la factura es el paso que cierra el pedido: siempre marca el
+    // pedido como entregado y la factura como facturada (la fecha de
+    // facturación se fija una sola vez, la primera vez que se guarda).
     const updated = await pedidos.update(item.id_pedido, {
       cliente: texto(req.body?.cliente ?? item.cliente),
       producto: texto(req.body?.producto ?? item.producto),
-      total: Number(req.body?.total ?? item.total ?? 0),
       adelanto: Number(req.body?.adelanto ?? item.adelanto ?? 0),
       app: texto(req.body?.canal ?? req.body?.app ?? item.app),
       tipo_pago: req.body?.tipoPago || req.body?.tipo_pago || item.tipo_pago || 'Banco',
       fecha_entrega: req.body?.fecha_entrega || req.body?.fechaEntrega || item.fecha_entrega,
-      estado: req.body?.estado || item.estado || 'pendiente',
+      estado: 'entregado',
+      envio_requerido: envioRequerido,
+      costo_envio: costoEnvio,
+      facturado: true,
+      facturado_en: item.facturado ? item.facturado_en : new Date().toISOString(),
     });
 
     const total = Number(updated.total ?? 0);
     const adelanto = Number(updated.adelanto ?? 0);
-    const saldoRestante = Math.max(total - adelanto, 0);
+    const saldoRestante = Math.max((total + costoEnvio) - adelanto, 0);
 
     res.json({
       id: updated.id_pedido,
@@ -108,6 +126,10 @@ router.put('/facturacion/:id', requirePermission('facturacion', 'editar'), async
       cliente: updated.cliente,
       producto: updated.producto,
       total,
+      envioRequerido,
+      costoEnvio,
+      facturado: !!updated.facturado,
+      facturadoEn: updated.facturado_en || null,
       adelanto,
       saldoRestante,
       tipoPago: updated.tipo_pago || 'Banco',

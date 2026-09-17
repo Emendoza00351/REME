@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ClipboardList, Minus, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { apiFetch } from '../utils/api'
+import { imprimirTicketPedido } from '../utils/ticket'
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { ModuleCommand } from '../types/module'
 
@@ -35,13 +36,15 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
   const [anticipoPagado, setAnticipoPagado] = useState(false)
   const [metodoAnticipo, setMetodoAnticipo] = useState('')
   const [bancoAnticipo, setBancoAnticipo] = useState('')
-  const [envioRequerido, setEnvioRequerido] = useState(false)
-  const [costoEnvio, setCostoEnvio] = useState(0)
   const [mensaje, setMensaje] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [confirmFinalize, setConfirmFinalize] = useState<Order | null>(null)
   const [screen, setScreen] = useState<'pos' | 'orders'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
+  const [ordersSearch, setOrdersSearch] = useState('')
+  const [ordersFechaDesde, setOrdersFechaDesde] = useState('')
+  const [ordersFechaHasta, setOrdersFechaHasta] = useState('')
+  const [ordersEstado, setOrdersEstado] = useState('')
   const [productionOrder, setProductionOrder] = useState<Order | null>(null)
   const [productionRows, setProductionRows] = useState<Order[]>([])
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -112,9 +115,27 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
     return products.filter((product) => !query || `${product.codigo} ${product.nombre}`.toLowerCase().includes(query))
   }, [products, search])
 
+  const visibleOrders = useMemo(() => {
+    // Cada palabra puede estar en una columna distinta (p. ej. "maria whatsapp").
+    const palabras = ordersSearch.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    return orders.filter((order) => {
+      const fecha = String(order.fecha_pedido ?? '').slice(0, 10)
+      if (ordersFechaDesde || ordersFechaHasta) {
+        if (!fecha) return false
+        if (ordersFechaDesde && fecha < ordersFechaDesde) return false
+        if (ordersFechaHasta && fecha > ordersFechaHasta) return false
+      }
+      if (ordersEstado && order.estado !== ordersEstado) return false
+      if (palabras.length === 0) return true
+      const valores = [order.id_pedido, order.cliente, order.app, order.producto, order.estado]
+        .map((v) => String(v ?? '').toLowerCase())
+      return palabras.every((palabra) => valores.some((valor) => valor.includes(palabra)))
+    })
+  }, [orders, ordersSearch, ordersFechaDesde, ordersFechaHasta, ordersEstado])
+
   const subtotal = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
   const descuentoAplicado = 0
-  const total = subtotal - descuentoAplicado + (envioRequerido ? costoEnvio : 0)
+  const total = subtotal - descuentoAplicado
   const anticipoRequerido = total * 0.5
 
   const addToCart = (product: Product) => {
@@ -160,8 +181,6 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
           cantidad: cart.reduce((sum, item) => sum + item.cantidad, 0),
           precio_unidad: cart.length === 1 ? cart[0].precio : 0,
           total,
-          envio_requerido: envioRequerido,
-          costo_envio: envioRequerido ? costoEnvio : 0,
           app: canal,
           descuento_porcentaje: 0,
           adelanto: anticipoPagado ? anticipoRequerido : 0,
@@ -172,7 +191,20 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
           estado: 'pendiente',
         }),
       })
-      if (!response.ok) throw new Error((await response.json()).error || 'No se pudo registrar el pedido.')
+      const creado = await response.json()
+      if (!response.ok) throw new Error(creado.error || 'No se pudo registrar el pedido.')
+
+      imprimirTicketPedido({
+        numero: creado.id_pedido ?? numeroPedido ?? '',
+        cliente: cliente.trim(),
+        canal,
+        items: cart.map((item) => ({ nombre: item.nombre, cantidad: item.cantidad, precio: item.precio })),
+        subtotal,
+        total,
+        anticipo: anticipoPagado ? anticipoRequerido : 0,
+        saldo: total - (anticipoPagado ? anticipoRequerido : 0),
+      })
+
       setCart([])
       setCliente('')
       setCanal('')
@@ -180,8 +212,6 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
       setAnticipoPagado(false)
       setMetodoAnticipo('')
       setBancoAnticipo('')
-      setEnvioRequerido(false)
-      setCostoEnvio(0)
       setMensaje('Pedido registrado correctamente.')
       await loadOrders()
       setScreen('orders')
@@ -324,8 +354,6 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
             <label>Cliente<input list="clientes-disponibles" value={cliente} onChange={(event) => setCliente(event.target.value)} placeholder="Buscar cliente" /><datalist id="clientes-disponibles">{clientes.map((nombre) => <option key={nombre} value={nombre} />)}</datalist></label>
             <label>Canal del pedido<select value={canal} onChange={(event) => setCanal(event.target.value)}><option value="">Seleccionar</option><option value="WhatsApp">WhatsApp</option><option value="Instagram">Instagram</option><option value="Tienda">Tienda</option></select></label>
             <label className="ventas-description-field">Descripción del pedido<textarea value={descripcion} onChange={(event) => setDescripcion(event.target.value)} placeholder="Detalles, colores o indicaciones" rows={2} /></label>
-            <label className="ventas-shipping-toggle"><span>¿Requiere envío?</span><input type="checkbox" checked={envioRequerido} onChange={(event) => setEnvioRequerido(event.target.checked)} /></label>
-            {envioRequerido && <label>Costo de envío<input type="number" min="0" value={costoEnvio} onChange={(event) => setCostoEnvio(Number(event.target.value) || 0)} /></label>}
           </div>
           <div className="ventas-totals"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="ventas-discount-row"><span>Descuento</span><b>- {money(descuentoAplicado)}</b></div><div className="ventas-total"><span>Total del pedido</span><b>{money(total)}</b></div><div className="ventas-advance"><span>Anticipo requerido (50%)</span><b>{money(anticipoRequerido)}</b></div></div>
           <label className="ventas-payment-status"><input type="checkbox" checked={anticipoPagado} onChange={(event) => setAnticipoPagado(event.target.checked)} /> Anticipo del 50% pagado <span>{anticipoPagado ? 'Pagado' : 'Pendiente'}</span></label>
@@ -335,12 +363,30 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
       </div>}
 
       {screen === 'orders' && <div className="ventas-orders-panel">
-        <div className="ventas-orders-toolbar"><button type="button" className="ventas-new-order-btn" onClick={() => { setCart([]); setMensaje(''); setScreen('pos') }}><Plus size={15} /> Nuevo pedido</button></div>
+        <div className="ventas-orders-toolbar">
+          <div className="ventas-orders-filtros">
+            <div className="ventas-search ventas-search--inline">
+              <Search size={15} />
+              <input value={ordersSearch} onChange={(e) => setOrdersSearch(e.target.value)} placeholder="Buscar pedido, cliente, canal..." />
+            </div>
+            <span className="crud-filtro-fecha">
+              <input className="field" type="date" value={ordersFechaDesde} onChange={(e) => setOrdersFechaDesde(e.target.value)} aria-label="Desde" title="Desde" />
+              <span>a</span>
+              <input className="field" type="date" value={ordersFechaHasta} onChange={(e) => setOrdersFechaHasta(e.target.value)} aria-label="Hasta" title="Hasta" />
+            </span>
+            <select className="field w-auto!" value={ordersEstado} onChange={(e) => setOrdersEstado(e.target.value)} aria-label="Estado">
+              <option value="">Estado: todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="entregado">Entregado</option>
+            </select>
+          </div>
+          <button type="button" className="ventas-new-order-btn" onClick={() => { setCart([]); setMensaje(''); setScreen('pos') }}><Plus size={15} /> Nuevo pedido</button>
+        </div>
         <div className="ventas-orders-table-wrap">
           <table className="ventas-orders-table">
             <thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Producto</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {orders.map((order) => <Fragment key={order.id_pedido}>
+              {visibleOrders.map((order) => <Fragment key={order.id_pedido}>
                 <tr>
                   <td>#{order.id_pedido}</td><td>{String(order.fecha_pedido ?? '').slice(0, 10)}</td><td>{order.cliente}</td><td>{order.app || '—'}</td><td>{order.producto}</td><td>{money(Number(order.total ?? 0))}</td><td>{order.estado}</td>
                   <td className="ventas-order-actions"><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => editOrder(order)} title="Editar pedido" aria-label="Editar pedido"><Pencil size={14} /></button><button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => openProduction(order)} title="Agregar producción" aria-label="Agregar producción"><ClipboardList size={14} /></button>{!order.finalizado && <button type="button" className="ventas-production-btn ventas-action-icon" onClick={() => setConfirmFinalize(order)} title="Finalizar y enviar a Facturación" aria-label="Finalizar y enviar a Facturación"><CheckCircle2 size={14} /></button>}</td>
@@ -363,7 +409,9 @@ export default function VentasModule({ command }: { command: ModuleCommand }) {
                   <table className="ventas-production-table"><thead><tr><th>Color</th><th>ID rollo</th><th>Peso inicial</th><th>Peso final</th><th>Consumido</th><th>Unidades</th></tr></thead><tbody>{productionRows.map((row) => <tr key={row.id_consumo}><td>{row.color || '—'}</td><td>{row.codigo_barras}</td><td>{row.peso_inicial} g</td><td>{row.peso_final} g</td><td>{row.peso_consumido} g</td><td>{row.unidades_producidas}</td></tr>)}</tbody></table>
                 </section></td></tr>}
               </Fragment>)}
-              {orders.length === 0 && <tr><td colSpan={8} className="ventas-empty">No hay pedidos registrados.</td></tr>}
+              {visibleOrders.length === 0 && (
+                <tr><td colSpan={8} className="ventas-empty">{orders.length === 0 ? 'No hay pedidos registrados.' : 'No hay pedidos que coincidan con el filtro.'}</td></tr>
+              )}
             </tbody>
           </table>
         </div>

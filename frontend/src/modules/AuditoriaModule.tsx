@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../utils/api'
 import Paginacion from '../components/Paginacion'
 import { usePaginacion } from '../utils/usePaginacion'
@@ -39,6 +39,10 @@ export default function AuditoriaModule() {
   const [eventos, setEventos] = useState<Evento[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -60,8 +64,38 @@ export default function AuditoriaModule() {
     return () => controller.abort()
   }, [])
 
+  const filtrados = useMemo(() => {
+    let filas = eventos
+
+    if (fechaDesde || fechaHasta) {
+      filas = filas.filter((ev) => {
+        const fecha = String(ev.fecha ?? '').slice(0, 10)
+        if (!fecha) return false
+        if (fechaDesde && fecha < fechaDesde) return false
+        if (fechaHasta && fecha > fechaHasta) return false
+        return true
+      })
+    }
+
+    if (estadoFiltro) {
+      filas = filas.filter((ev) => ev.estado === estadoFiltro)
+    }
+
+    // Cada palabra puede estar en una columna distinta (p. ej. "juan crear").
+    const palabras = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (palabras.length > 0) {
+      filas = filas.filter((ev) => {
+        const valores = [ev.usuario, ev.rol, ev.modulo, ACCION_LABEL[ev.accion] ?? ev.accion, ev.registroId, ev.estado]
+          .map((v) => String(v ?? '').toLowerCase())
+        return palabras.every((palabra) => valores.some((valor) => valor.includes(palabra)))
+      })
+    }
+
+    return filas
+  }, [eventos, search, fechaDesde, fechaHasta, estadoFiltro])
+
   const { pageLimit, setPageLimit, paginaActual, totalPaginas, pageItems, irAnterior, irSiguiente } =
-    usePaginacion(eventos)
+    usePaginacion(filtrados)
 
   return (
     <div className="erp-card overflow-hidden">
@@ -73,6 +107,25 @@ export default function AuditoriaModule() {
       {error && (
         <div className="border-b border-[#f0d9cc] bg-[#fff5ee] px-4 py-2 text-[12px] text-[#9e3f1f]">{error}</div>
       )}
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E4E4E1] bg-[#FFFFFF] px-3 py-2">
+        <input
+          className="field w-64!"
+          placeholder="Buscar en esta tabla"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <span className="crud-filtro-fecha">
+          <input className="field" type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} aria-label="Desde" title="Desde" />
+          <span>a</span>
+          <input className="field" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} aria-label="Hasta" title="Hasta" />
+        </span>
+        <select className="field w-auto!" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)} aria-label="Estado">
+          <option value="">Estado: todos</option>
+          <option value="ok">OK</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-[860px] border-collapse text-[12px]">
@@ -97,7 +150,7 @@ export default function AuditoriaModule() {
             ) : pageItems.length === 0 ? (
               <tr>
                 <td className="px-3 py-6 text-center text-[12px] text-[#8A7362]" colSpan={7}>
-                  Todavía no hay eventos registrados.
+                  {eventos.length === 0 ? 'Todavía no hay eventos registrados.' : 'No hay eventos que coincidan con el filtro.'}
                 </td>
               </tr>
             ) : (
@@ -128,7 +181,7 @@ export default function AuditoriaModule() {
         totalPaginas={totalPaginas}
         onPrev={irAnterior}
         onNext={irSiguiente}
-        totalItems={eventos.length}
+        totalItems={filtrados.length}
         itemsSuffix={`evento${eventos.length !== 1 ? 's' : ''}`}
       />
     </div>

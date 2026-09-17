@@ -80,9 +80,11 @@ body {
 /* Backdrop del sidebar en mobile: oculto por defecto. */
 .erp-sidebar-backdrop { display: none; }
 
-/* En touch/pantallas angostas el sidebar expandido flota sobre el contenido
-   en vez de empujarlo, para no aplastar la columna derecha. */
-@media (max-width: 899px), (pointer: coarse) {
+/* Solo en touch (celular/tablet) el sidebar expandido flota sobre el
+   contenido en vez de empujarlo — ahí no hay espacio para repartir. Con
+   mouse/trackpad (pointer: fine) siempre empuja el contenido, aunque la
+   ventana esté angosta, para no tapar los módulos de golpe. */
+@media (pointer: coarse) {
   .erp-sidebar-backdrop {
     display: block;
     position: fixed;
@@ -519,6 +521,16 @@ body {
 }
 .erp-panel--active { display: flex; }
 
+/* El sidebar expandido (210px) le resta ancho real a esta columna: sin achicar
+   el padding acá, un módulo con formularios angostos queda innecesariamente
+   apretado apenas la ventana no es enorme. */
+@media (max-width: 900px) {
+  .erp-panel { padding: 18px 20px 24px; }
+}
+@media (max-width: 560px) {
+  .erp-panel { padding: 14px 12px 20px; }
+}
+
 /* Los módulos de REME son tarjetas de alto natural: se anclan arriba y el
    scroll lo resuelve .erp-content, en vez de estirarse y recortar la tabla. */
 .erp-panel--full {
@@ -754,7 +766,11 @@ body {
 }
 
 /* ─── Punto de venta ──────────────────────── */
-.ventas-pos-card { overflow: hidden; }
+/* El card ocupa todo el alto disponible del panel (en vez de crecer con el
+   contenido como el resto de los módulos) para que la lista de la izquierda
+   y el detalle de la derecha puedan scrollear cada uno por su cuenta, sin
+   perder de vista el encabezado ni el botón de guardar/registrar. */
+.ventas-pos-card { overflow: hidden; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .ventas-pos-heading {
   display: flex;
   align-items: center;
@@ -770,7 +786,9 @@ body {
 .ventas-view-actions button, .ventas-production-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.45); border-radius: 6px; padding: 6px 9px; background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .ventas-view-actions button:hover, .ventas-view-actions .ventas-view-active { background: #fff; color: var(--primary); }
 .ventas-orders-panel { padding: 14px; }
-.ventas-orders-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.ventas-orders-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ventas-orders-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ventas-search--inline { width: 220px; padding: 6px 10px; }
 .ventas-new-order-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; padding: 8px 11px; background: var(--primary); color: #fff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .ventas-new-order-btn:hover { background: var(--primary-hover); }
 .ventas-orders-table-wrap { overflow-x: auto; }
@@ -798,8 +816,8 @@ body {
 @media (max-width: 900px) { .ventas-production-form { grid-template-columns: repeat(3, minmax(120px, 1fr)); } }
 @media (max-width: 720px) { .ventas-production-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .ventas-production-form { grid-template-columns: 1fr; } .ventas-production-heading { flex-direction: column; } }
-.ventas-pos-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr); min-height: 540px; }
-.ventas-products-panel { padding: 16px; background: #FAF8F4; }
+.ventas-pos-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr); flex: 1; min-height: 380px; }
+.ventas-products-panel { padding: 16px; background: #FAF8F4; overflow: auto; min-height: 0; }
 .ventas-search { display: flex; align-items: center; gap: 8px; border: 1px solid #DED5C9; border-radius: 8px; padding: 9px 11px; background: #fff; color: var(--primary); }
 .ventas-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); font: inherit; font-size: 13px; }
 .ventas-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
@@ -811,7 +829,7 @@ body {
 .ventas-product-price { color: var(--primary); font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 700; }
 .ventas-product-add { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; color: var(--primary); font-size: 11px; font-weight: 700; }
 .ventas-empty, .ventas-cart-empty { color: #927B60; font-size: 13px; }
-.ventas-cart-panel { display: flex; flex-direction: column; border-left: 1px solid #E4DDD3; background: #fff; }
+.ventas-cart-panel { display: flex; flex-direction: column; border-left: 1px solid #E4DDD3; background: #fff; overflow-y: auto; min-height: 0; }
 .ventas-cart-heading { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #E4DDD3; color: var(--primary); font-weight: 700; }
 .ventas-cart-heading span { display: inline-flex; align-items: center; gap: 7px; }
 .ventas-cart-client { display: flex; min-width: 0; align-items: center; gap: 6px; color: #765F47; font-size: 11px; }
@@ -858,7 +876,11 @@ body {
 .ventas-checkout:disabled { cursor: not-allowed; opacity: .45; }
 .ventas-message { margin: 6px 14px 14px; color: var(--primary); font-size: 12px; }
 @media (max-width: 850px) {
-  .ventas-pos-layout { grid-template-columns: 1fr; }
+  /* Apiladas en una sola columna, cada scroll propio estorba más de lo que
+     ayuda: se vuelve a la página completa scrolleando de un tirón. */
+  .ventas-pos-card { flex: none; }
+  .ventas-pos-layout { grid-template-columns: 1fr; flex: none; min-height: 0; }
+  .ventas-products-panel, .ventas-cart-panel { overflow: visible; }
   .ventas-cart-panel { border-top: 1px solid #E4DDD3; border-left: 0; }
 }
 @media (max-width: 480px) {
@@ -914,28 +936,25 @@ body {
 .resultado-kpi strong { color: var(--primary); font-family: 'Sora', sans-serif; font-size: 18px; }
 .resultados-error { color: #A45D4C; font-size: 12px; }
 .resultados-loading { color: #765F47; font-size: 12px; }
-.facturacion-panel { overflow: hidden; }
-.facturacion-heading { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--primary); color: #fff; }
-.facturacion-heading h2 { margin: 0; font-size: 18px; }
-.facturacion-heading p { margin: 3px 0 0; color: #F5EBDD; font-size: 11px; }
+/* Facturación reutiliza la estructura y las clases .ventas-* del Punto de
+   venta (mismo layout de dos paneles) — acá solo queda la lista de la
+   izquierda, que es una tabla en vez de una grilla de productos. */
 .facturacion-message { margin: 0; border-bottom: 1px solid #E4DDD3; padding: 7px 12px; color: var(--primary); font-size: 11px; }
-.facturacion-table-wrap { overflow-x: auto; }
+.facturacion-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.facturacion-toolbar .ventas-search { flex: 1; }
+.facturacion-filtro { border: 1px solid #DED5C9; border-radius: 8px; padding: 0 9px; background: #fff; color: var(--primary); font: inherit; font-size: 12px; font-weight: 700; }
+.facturacion-list { margin-top: 14px; border: 1px solid #E4DDD3; border-radius: 8px; overflow-x: auto; background: #fff; }
 .facturacion-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .facturacion-table th, .facturacion-table td { border-bottom: 1px solid #EEE8E0; padding: 8px 9px; text-align: left; white-space: nowrap; }
 .facturacion-table th { background: #FAF8F4; color: #765F47; font-size: 10px; text-transform: uppercase; }
-.facturacion-table tbody tr:not(.facturacion-detail-row) { cursor: pointer; }
-.facturacion-table tbody tr:not(.facturacion-detail-row):hover, .facturacion-row-open { background: #FBF7F1; }
+.facturacion-table tbody tr { cursor: pointer; }
+.facturacion-table tbody tr:hover, .facturacion-table tbody tr.facturacion-row-open { background: #FBF7F1; }
 .facturacion-status { border-radius: 999px; background: #F5EBDD; padding: 3px 7px; color: #9A6841; font-size: 10px; font-weight: 700; }
 .facturacion-status.is-paid { background: #E7F2E8; color: #4C7B52; }
-.facturacion-detail-row > td { padding: 0 !important; background: #FAF8F4; }
-.facturacion-detail { margin: 8px; border: 1px solid #E4DDD3; border-radius: 8px; padding: 11px; background: #fff; }
-.facturacion-detail-title { display: flex; justify-content: space-between; margin-bottom: 9px; color: var(--primary); font-size: 12px; }
-.facturacion-detail-title span { color: #765F47; font-size: 11px; }
-.facturacion-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 7px 9px; }
-.facturacion-detail-grid label { display: flex; flex-direction: column; gap: 3px; color: #765F47; font-size: 10px; font-weight: 700; }
-.facturacion-detail-grid input, .facturacion-detail-grid select { width: 100%; max-width: 180px; border: 1px solid #DED5C9; border-radius: 5px; padding: 5px 6px; background: #fff; outline: 0; font: inherit; font-size: 11px; }
-.facturacion-save { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; border: 0; border-radius: 6px; padding: 7px 10px; background: var(--primary); color: #fff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .facturacion-empty { padding: 24px !important; color: #927B60; text-align: center !important; }
+/* Cliente/Producto van de solo lectura y ocupan todo el ancho del panel de
+   detalle, igual que "Descripción del pedido" en el Punto de venta. */
+.ventas-cart-form .facturacion-field-full { grid-column: 1 / -1; }
 .reme-dialog-backdrop { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 20px; background: rgba(38, 28, 20, .42); backdrop-filter: blur(5px); animation: reme-dialog-fade .16s ease-out; }
 .reme-dialog { position: relative; width: min(410px, 100%); border: 1px solid rgba(255,255,255,.7); border-radius: 14px; padding: 25px 24px 20px; background: #fff; box-shadow: 0 24px 70px rgba(36, 25, 16, .26); animation: reme-dialog-rise .18s ease-out; }
 .reme-dialog-close { position: absolute; top: 10px; right: 10px; display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #927B60; cursor: pointer; }
@@ -951,14 +970,19 @@ body {
 .reme-dialog-confirm--danger { border-color: #A45D4C; background: #A45D4C; }
 @keyframes reme-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes reme-dialog-rise { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (max-width: 800px) { .facturacion-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 480px) { .facturacion-detail-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .resultados-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 900px) {
   .erp-card--productos > .space-y-5 .grid,
   .erp-card--gastos > .space-y-5 .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .erp-card--inventario > .space-y-5 .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+  /* Filtro de rango de fechas de la barra de herramientas de las tablas
+     (CrudModule) — solo aparece en los módulos que tienen un campo tipo
+     "date" en su formulario. */
+  .crud-filtro-fecha { display: flex; align-items: center; gap: 6px; }
+  .crud-filtro-fecha .field { width: 140px; }
+  .crud-filtro-fecha span { color: #927B60; font-size: 11px; }
 
   /* Ficha operativa común: reemplaza el aspecto de formulario genérico por una
     superficie compacta, jerarquizada y consistente en los módulos administrativos. */
